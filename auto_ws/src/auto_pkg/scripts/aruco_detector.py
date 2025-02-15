@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 
-from std_msgs.msg import Int32MultiArray
+from std_msgs.msg import Int32MultiArray, Float32MultiArray
 from sensor_msgs.msg import Image
 
 # OpenCV
@@ -19,6 +19,7 @@ class ArucoDetectorNode(Node):
         super().__init__('aruco_detector')
         self.publisher_ids = self.create_publisher(Int32MultiArray, 'detected_ids', 10)
         self.publisher_frame = self.create_publisher(Image, 'detected_frame', 10)
+        self.publisher_corners = self.create_publisher(Float32MultiArray, 'detected_corners', 10)
         
         self.bridge = CvBridge()
         
@@ -41,7 +42,7 @@ class ArucoDetectorNode(Node):
         self.marker_length = 0.05
         
         # Capture video frames using rtsp
-        rtsp_url = f"rtsp://admin:123456@192.168.1.{self.camera_ip}:554/mpeg4"
+        rtsp_url = f"rtsp://admin:123456@192.168.1.12:554/mpeg4"
         self.cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
@@ -96,17 +97,26 @@ class ArucoDetectorNode(Node):
         
         if ids is not None:
             self.get_logger().info(f"Detected ArUco IDs: {ids.flatten()}")
-            self.get_logger().info(f"Detected ArUco corners: {corners}")
+            self.get_logger().info(f"Detected ArUco corners: {corners[0]}")
             
             # Publish the detected IDs
             msg_ids = Int32MultiArray(data=ids.flatten().tolist())
             self.publisher_ids.publish(msg_ids)
 
+            # Publish corners
+            msg_corners = Float32MultiArray(data=corners[0].flatten().tolist())
+            self.publisher_corners.publish(msg_corners)
+
             # Draw detected markers
             for i in range(len(ids)):
                 # Draw borders around detected markers
                 cv2.polylines(image, [np.int32(corners[i])], True, (255, 0, 0), 2)
-                cv2.putText(image, f"ID: {ids[i][0]}", (int(corners[i][0][0][0]), int(corners[i][0][0][1])), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+                # Calculate the center of the marker
+                mid_x = int(np.mean(corners[i][0][:, 0]))
+                mid_y = int(np.mean(corners[i][0][:, 1]))
+
+                cv2.putText(image, f"ID: {ids[i][0]}", (mid_x, mid_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners[i], self.marker_length, self.camera_matrix, self.dist_coeffs)
                 cv2.drawFrameAxes(image, self.camera_matrix, self.dist_coeffs, rvec, tvec, self.marker_length * 0.5)
                 self.image = image
