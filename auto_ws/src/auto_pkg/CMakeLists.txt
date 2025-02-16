@@ -35,7 +35,13 @@ ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS
   scripts/action_client.py
   scripts/aruco_detector.py
+  scripts/macula_node.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+        launch
+        DESTINATION share/${PROJECT_NAME}/
 )
 
 ament_package()
