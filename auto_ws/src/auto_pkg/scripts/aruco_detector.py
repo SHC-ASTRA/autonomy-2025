@@ -34,6 +34,15 @@ class ArucoDetectorNode(Node):
         self.parameters = cv2.aruco.DetectorParameters()
         self.detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.parameters)
         
+        # Define the codec and create VideoWriter object
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+
+        VIDEOS_DIR = os.path.join('.', 'videos')
+        video_path = os.path.join(VIDEOS_DIR, 'IMG_9135.mp4')
+        video_path_out = '{}_out.mp4'.format(video_path)
+
+        self.out = cv2.VideoWriter(video_path_out, fourcc, 20.0, (640,  480))
+        
         # self.detect_aruco()
         
         # Pose estimation (dummy camera params for now)
@@ -42,7 +51,7 @@ class ArucoDetectorNode(Node):
         self.marker_length = 0.05
         
         # Capture video frames using rtsp
-        rtsp_url = f"rtsp://admin:123456@192.168.1.12:554/mpeg4"
+        rtsp_url = f"rtsp://admin:123456@192.168.1.11:554/mpeg4"
         self.cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
@@ -100,7 +109,7 @@ class ArucoDetectorNode(Node):
             self.get_logger().info(f"Detected ArUco corners: {corners[0]}")
             
             # Publish the detected IDs
-            msg_ids = Int32MultiArray(data=ids.flatten().tolist())
+            msg_ids = Int32MultiArray(data=ids.flatten())
             self.publisher_ids.publish(msg_ids)
 
             # Publish corners
@@ -127,8 +136,9 @@ class ArucoDetectorNode(Node):
         else:
             self.get_logger().info("No markers detected.")
         # Show image
-        cv2.imshow("Aruco Detection", image)
-        cv2.waitKey(1)
+        # cv2.imshow("Aruco Detection", image)
+        # cv2.waitKey(1)
+        self.out.write(image)
 
     def destroy_node(self):
         if self.cap.isOpened():
