@@ -22,12 +22,6 @@ class ArucoDetectorNode(Node):
         self.publisher_corners = self.create_publisher(Float32MultiArray, 'detected_corners', 10)
         
         self.bridge = CvBridge()
-        
-        # Load image from parameter
-        self.declare_parameter('image_path', '../marker_1.png') 
-        self.image_path = self.get_parameter('image_path').value
-        self.declare_parameter('camera_ip', '12')
-        self.camera_ip = str(self.get_parameter('camera_ip').get_parameter_value().string_value)
 
         # ArUco predefined dictionary and parameters
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
@@ -35,13 +29,8 @@ class ArucoDetectorNode(Node):
         self.detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.parameters)
         
         # Define the codec and create VideoWriter object
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-
-        VIDEOS_DIR = os.path.join('.', 'videos')
-        video_path = os.path.join(VIDEOS_DIR, 'IMG_9135.mp4')
-        video_path_out = '{}_out.mp4'.format(video_path)
-
-        self.out = cv2.VideoWriter(video_path_out, fourcc, 20.0, (640,  480))
+        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+        self.out = cv2.VideoWriter('output.mp4', fourcc, 20.0, (640,  480))
         
         # self.detect_aruco()
         
@@ -138,6 +127,7 @@ class ArucoDetectorNode(Node):
         # Show image
         # cv2.imshow("Aruco Detection", image)
         # cv2.waitKey(1)
+        image = cv2.flip(image, 0)
         self.out.write(image)
 
     def destroy_node(self):
