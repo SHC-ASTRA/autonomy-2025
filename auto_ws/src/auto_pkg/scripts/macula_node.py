@@ -24,6 +24,13 @@ class MaculaNode(Node):
         self.publisher_frame = self.create_publisher(Image, 'detected_frame', 10)
         self.publisher_corners = self.create_publisher(Float32MultiArray, 'detected_corners', 10)
         self.publisher_objects = self.create_publisher(Float32MultiArray, 'detected_objects', 10)
+
+        mode = int(input("Enter 1 for ArUco Detection or 2 for Object Detection: "))
+        if mode in [1, 2]:
+            self.mode = mode
+            self.get_logger().info(f"Mode set to {self.mode}")
+        else:
+            self.get_logger().error("Invalid input. Please enter 1 or 2.")
         
         self.bridge = CvBridge()
 
@@ -38,8 +45,7 @@ class MaculaNode(Node):
         self.marker_length = 0.05
 
         # Load YOLOv8 model
-        # model_path = os.path.join('.',"best.pt")
-        # self.model = YOLO(model_path)
+        self.model = YOLO("./src/auto_pkg/models/best.pt") 
         
         # Capture video frames using rtsp
         rtsp_url = f"rtsp://admin:123456@192.168.1.15:554/mpeg4"
@@ -55,23 +61,8 @@ class MaculaNode(Node):
         self.thread = threading.Thread(target=self.update_frame, daemon=True)
         self.thread.start()
 
-        self.get_logger().info("Macula node has been started. Enter '1' for ArUco Detection or '2' for Object Detection")
-        self.mode = 1   # Default to ArUco
-        self.input_thread = threading.Thread(target=self.get_mode_input, daemon=True)
-        self.input_thread.start()
-        self.timer = self.create_timer(0.1, self.detect_aruco)  # Timer to run at 10 Hz
-    
-    def mode_select(self):
-        while self.running:
-            try:
-                mode = int(input("Enter 1 for ArUco Detection or 2 for Object Detection: "))
-                if mode in [1, 2]:
-                    self.mode = mode
-                    self.get_logger().info(f"Mode set to {self.mode}")
-                else:
-                    self.get_logger().error("Invalid input. Please enter 1 or 2.")
-            except ValueError:
-                self.get_logger().error("Invalid input. Enter an integer value of 1 or 2.")
+        self.get_logger().info("Macula node has been started.")
+        self.timer = self.create_timer(0.1, self.frame_mode)  # Timer to run at 10 Hz
     
     def update_frame(self):
         # Continuously read frames to reduce RTSP latency
@@ -88,12 +79,13 @@ class MaculaNode(Node):
         frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
 
         if self.mode == 1:
-            self.detect_aruco(frame)
+            self.detect_aruco()
         elif self.mode == 2:
-            self.detect_objects(frame)
+            self.detect_objects()
 
-    def detect_aruco(self, image):
+    def detect_aruco(self):
         # Detect markers
+        image = self.frame
         corners, ids, _ = self.detector.detectMarkers(image)
         
         if ids is not None:
@@ -131,32 +123,33 @@ class MaculaNode(Node):
         cv2.imshow("Aruco Detection", image)
         cv2.waitKey(1)
 
-    def detect_objects(self, frame):
-        # results = self.model(frame)[0]
+    def detect_objects(self):
+        frame = self.frame
+        threshold = 0.05
+        
+        results = self.model(frame)[0]
         detected_objects = []
 
-        # for result in results:
-        #     for box in result.boxes:
-        #         x1, y1, x2, y2 = map(int, box.xyxy[0])
-        #         cls = int(box.cls[0])  # Class ID
-        #         conf = float(box.conf[0])  # Confidence score
+        for result in results.boxes.data.tolist():
+                x1, y1, x2, y2, score, class_id = result
 
-        #         # Append to detected objects list
-        #         detected_objects.extend([cls, conf])
+                # Append to detected objects list
+                detected_objects.extend([class_id, score])
 
-        #         # Draw bounding box and confidence score on frame
-        #         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        #         cv2.putText(frame, f"Class: {cls}, Conf: {conf:.2f}", (x1, y1 - 10), 
-        #                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                # Draw bounding box and confidence score on frame
+                if score > threshold:
+                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 4)
+                    cv2.putText(frame, results.names[int(class_id)].upper(), (int(x1), int(y1 - 10)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3, cv2.LINE_AA)
 
         # Publish detected objects (Class ID, Confidence)
         if detected_objects:
-            msg = Float32MultiArray(data=detected_objects)
-            self.publisher_objects.publish(msg)
+            msg_objects = Float32MultiArray(data=detected_objects)
+            self.publisher_objects.publish(msg_objects)
 
-        # Publish processed frame
-        img_msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
-        self.publisher_frame.publish(img_msg)
+        # Show image
+        cv2.imshow("Aruco Detection", frame)
+        cv2.waitKey(1)
 
     def destroy_node(self):
         if self.cap.isOpened():
