@@ -25,6 +25,8 @@ class MaculaNode(Node):
         self.publisher_corners = self.create_publisher(Float32MultiArray, 'detected_corners', 10)
         self.publisher_objects = self.create_publisher(Float32MultiArray, 'detected_objects', 10)
 
+        self.i = 0
+
         mode = int(input("Enter 1 for ArUco Detection or 2 for Object Detection: "))
         if mode in [1, 2]:
             self.mode = mode
@@ -60,6 +62,14 @@ class MaculaNode(Node):
         # Start a thread to grab the latest frame
         self.thread = threading.Thread(target=self.update_frame, daemon=True)
         self.thread.start()
+
+        # Initialize VideoWriter for saving the video
+        self.output_filename = 'stream.mp4'
+        self.fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        self.fps = 30  # Adjust FPS as needed
+        self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))  
+        self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))   
+        self.out = cv2.VideoWriter(self.output_filename, self.fourcc, self.fps, (self.frame_width, self.frame_height))
 
         self.get_logger().info("Macula node has been started.")
         self.timer = self.create_timer(0.1, self.frame_mode)  # Timer to run at 10 Hz
@@ -119,6 +129,8 @@ class MaculaNode(Node):
             self.publisher_frame.publish(img_msg)
         else:
             self.get_logger().info("No markers detected.")
+
+        self.image_callback(image)
         # Show image
         cv2.imshow("Aruco Detection", image)
         cv2.waitKey(1)
@@ -146,10 +158,19 @@ class MaculaNode(Node):
         if detected_objects:
             msg_objects = Float32MultiArray(data=detected_objects)
             self.publisher_objects.publish(msg_objects)
-
+        
+        self.image_callback(frame)
         # Show image
         cv2.imshow("Aruco Detection", frame)
         cv2.waitKey(1)
+
+    def image_callback(self, image):
+        try:
+            self.i += 1
+            cv2.imwrite(f"./src/auto_pkg/stream/img_{self.i}.png", image)
+            # self.out.write(image)
+        except Exception as e:
+            self.get_logger().error('Error saving image: %s' % str(e))
 
     def destroy_node(self):
         if self.cap.isOpened():
@@ -157,7 +178,6 @@ class MaculaNode(Node):
         cv2.destroyAllWindows()
         super().destroy_node()
 
-            
 def main(args=None):
     rclpy.init(args=args)
     node = MaculaNode()
