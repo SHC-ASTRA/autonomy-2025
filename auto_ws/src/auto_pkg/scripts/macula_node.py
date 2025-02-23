@@ -120,8 +120,8 @@ class MaculaNode(Node):
                 mid_y = int(np.mean(corners[i][0][:, 1]))
 
                 cv2.putText(image, f"ID: {ids[i][0]}", (mid_x, mid_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners[i], self.marker_length, self.camera_matrix, self.dist_coeffs)
-                cv2.drawFrameAxes(image, self.camera_matrix, self.dist_coeffs, rvec, tvec, self.marker_length * 0.5)
+                # rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners[i], self.marker_length, self.camera_matrix, self.dist_coeffs)
+                # cv2.drawFrameAxes(image, self.camera_matrix, self.dist_coeffs, rvec, tvec, self.marker_length * 0.5)
                 self.image = image
 
             # Publish the processed image
@@ -178,6 +178,7 @@ class MaculaNode(Node):
         cv2.destroyAllWindows()
         super().destroy_node()
 
+            
 def main(args=None):
     rclpy.init(args=args)
     node = MaculaNode()
