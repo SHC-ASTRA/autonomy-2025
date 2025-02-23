@@ -45,11 +45,13 @@ Anakoinosi::Anakoinosi(): Node("core_listener")
 
 void Anakoinosi::topic_callback(const std_msgs::msg::String & msg) const 
 {
-
+    RCLCPP_INFO(this->get_logger(), "I heard: '%s'", msg.data.c_str());
 }
 
 void Anakoinosi::topic_summon() 
 {
     auto message = std_msgs::msg::String();
     message.data = "Hell";
+    RCLCPP_INFO(this->get_logger(), "Publishing '%s'", message.data.c_str());
+    publisher_->publish(message);
 }

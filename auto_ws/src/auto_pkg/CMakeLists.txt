@@ -13,10 +13,11 @@ find_package(clucky_interfaces REQUIRED)
 
 add_executable(auto_server src/server.cpp)
 ament_target_dependencies(auto_server rclcpp rclcpp_action clucky_interfaces)
+target_include_directories(auto_server PUBLIC src/)
 
 add_executable(auto_client_startup src/starter_client.cpp)
 ament_target_dependencies(auto_client_startup rclcpp rclcpp_action clucky_interfaces)
-
+target_include_directories(auto_client_startup PUBLIC src/)
 
 
 

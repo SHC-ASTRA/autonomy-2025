@@ -20,6 +20,8 @@
 
 // Local Includes
 #include "hippocampus.h"                              //Class files
+#include "hippocampus.cpp"
+
 
 //*************************************************************************************************
 // Global Variables
