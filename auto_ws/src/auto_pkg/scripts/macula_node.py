@@ -50,7 +50,7 @@ class MaculaNode(Node):
         self.model = YOLO("./src/auto_pkg/models/best.pt") 
         
         # Capture video frames using rtsp
-        rtsp_url = f"rtsp://admin:123456@192.168.1.15:554/mpeg4"
+        rtsp_url = f"rtsp://admin:123456@192.168.1.12:554/mpeg4"
         self.cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if not self.cap.isOpened():
@@ -132,8 +132,8 @@ class MaculaNode(Node):
 
         self.image_callback(image)
         # Show image
-        cv2.imshow("Aruco Detection", image)
-        cv2.waitKey(1)
+        # cv2.imshow("Aruco Detection", image)
+        # cv2.waitKey(1)
 
     def detect_objects(self):
         frame = self.frame
@@ -153,6 +153,8 @@ class MaculaNode(Node):
                     cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 4)
                     cv2.putText(frame, results.names[int(class_id)].upper(), (int(x1), int(y1 - 10)),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3, cv2.LINE_AA)
+                    cv2.putText(frame, str(round(score, 2)), (int(x2 - 10), int(y1)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3, cv2.LINE_AA)
 
         # Publish detected objects (Class ID, Confidence)
         if detected_objects:
@@ -161,8 +163,8 @@ class MaculaNode(Node):
         
         self.image_callback(frame)
         # Show image
-        cv2.imshow("Aruco Detection", frame)
-        cv2.waitKey(1)
+        # cv2.imshow("Aruco Detection", frame)
+        # cv2.waitKey(1)
 
     def image_callback(self, image):
         try:
