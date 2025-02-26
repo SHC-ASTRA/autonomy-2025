@@ -76,18 +76,19 @@ public:
     
     NavigateRoverSubscriberNode() : Node("navigate_rover_subscriber")
     {
-      navigate_rover_subscriber_ = this->create_subscription<std_msgs::msg::String>(
+      navigate_rover_subscriber_ = this->create_subscription<ros2_interfaces_pkg::msg::CoreFeedback>(
       "astra/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::topic_callback, this, _1));
 
-      obj_detect_subscriber_ = this->create_subscription<std_msgs::msg::String>(
-      "astra/auto/obj", 10, std::bind(&NavigateRoverSubscriberNode::topic_callback, this, _1));
+    //   obj_detect_subscriber_ = this->create_subscription<std_msgs::msg::String>(
+    //   "astra/auto/obj", 10, std::bind(&NavigateRoverSubscriberNode::topic_callback, this, _1));
 
     }
 
 private:
-    void topic_callback(const std_msgs::msg::String & msg) 
+    void topic_callback(const ros2_interfaces_pkg::msg::CoreFeedback & msg) 
     {
-
+        current_lat = msg.gps_lat;
+        current_long = msg.gps_long;
         // std::string command;
         // command = msg.data;
         // RCLCPP_INFO(this->get_logger(), "Recieved: '%s'", msg.data.c_str());
@@ -119,8 +120,8 @@ private:
 
     }
 
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr navigate_rover_subscriber_;
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr obj_detect_subscriber_;
+    rclcpp::Subscription<ros2_interfaces_pkg::msg::CoreFeedback>::SharedPtr navigate_rover_subscriber_;
+    // rclcpp::Subscription<std_msgs::msg::String>::SharedPtr obj_detect_subscriber_;
 
 };
 
