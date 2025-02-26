@@ -41,6 +41,7 @@
 
 //Other packages to include
 #include "astra_auto_interfaces/action/navigate_rover.hpp"  //contains action files and srv files
+#include "ros2_interfaces_pkg/msg/core_feedback.hpp"
 
 
 //*************************************************************************************************
@@ -58,6 +59,8 @@ using namespace std::placeholders;
 double imu_bearing;                    
 std::string gps_string;
 bool cancel_request = false;
+double current_lat;
+double current_long;
 
 
 
@@ -84,34 +87,35 @@ public:
 private:
     void topic_callback(const std_msgs::msg::String & msg) 
     {
-        std::string command;
-        command = msg.data;
-        RCLCPP_INFO(this->get_logger(), "Recieved: '%s'", msg.data.c_str());
+
+        // std::string command;
+        // command = msg.data;
+        // RCLCPP_INFO(this->get_logger(), "Recieved: '%s'", msg.data.c_str());
         
 
         
-        std::string delimiter = ",";
-            size_t pos = 0;
-            std::string token;
-            std::string scommand = command.c_str();
-            pos = scommand.find(delimiter);
-            token = scommand.substr(0, pos);
+        // std::string delimiter = ",";
+        //     size_t pos = 0;
+        //     std::string token;
+        //     std::string scommand = command.c_str();
+        //     pos = scommand.find(delimiter);
+        //     token = scommand.substr(0, pos);
             
 
-        if (token == "orientation")
-        {
-            RCLCPP_INFO(this->get_logger(), "Recieved IMU bearing");
+        // if (token == "orientation")
+        // {
+        //     RCLCPP_INFO(this->get_logger(), "Recieved IMU bearing");
 
-            //Turns command into the proper bearing
+        //     //Turns command into the proper bearing
             
-            imu_bearing = orientation_string(scommand); 
-        }
-        else if (token == "gps")
-        {
-            RCLCPP_INFO(this->get_logger(), "Recieved GPS location");
-            //Turns command into GPS string
-            gps_string = command;
-        }
+        //     imu_bearing = orientation_string(scommand); 
+        // }
+        // else if (token == "gps")
+        // {
+        //     RCLCPP_INFO(this->get_logger(), "Recieved GPS location");
+        //     //Turns command into GPS string
+        //     gps_string = command;
+        // }
 
     }
 
@@ -235,8 +239,8 @@ private:
         auto message_motors = std_msgs::msg::String();
         auto message_feedback = std_msgs::msg::String();
         
-        double current_lat;
-        double current_long;
+        // double current_lat;
+        // double current_long;
         //double bearing;
         //float currentHeading;
         //float needHeading = 0;
@@ -320,8 +324,8 @@ private:
                 publisher_motors->publish(message_motors);
                 usleep(0.5 * microsecond);
                 
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
 
                 needDistance = find_distance(gps_lat_target, gps_long_target, current_lat, current_long);
                 i_needDistance = needDistance;
@@ -355,8 +359,8 @@ private:
                 message_motors.data = "data,getGPS";
                 publisher_motors->publish(message_motors);
                 usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
 
                 if ((abs(current_lat - gps_lat_target) <= 0.000018) && \
                     ((abs(current_long - gps_long_target) <= 0.000018) ))
@@ -480,8 +484,8 @@ private:
                 publisher_motors->publish(message_motors);
                 usleep(0.5 * microsecond);
                 
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
 
                 needDistance = find_distance(t_lat, t_long, current_lat, current_long);
                 i_needDistance = needDistance;
@@ -515,8 +519,8 @@ private:
                 message_motors.data = "data,getGPS";
                 publisher_motors->publish(message_motors);
                 usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
                 //*********************************************************************************
                 //OpenCV SHIT
                 //*********************************************************************************
@@ -633,8 +637,8 @@ private:
                 publisher_motors->publish(message_motors);
                 usleep(0.5 * microsecond);
                 
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
 
                 needDistance = find_distance(t_lat, t_long, current_lat, current_long);
                 i_needDistance = needDistance;
@@ -668,8 +672,8 @@ private:
                 message_motors.data = "data,getGPS";
                 publisher_motors->publish(message_motors);
                 usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
                 //*********************************************************************************
                 //OpenCV SHIT
                 //*********************************************************************************
@@ -785,8 +789,8 @@ private:
                 publisher_motors->publish(message_motors);
                 usleep(0.5 * microsecond);
                 
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
 
                 needDistance = find_distance(t_lat, t_long, current_lat, current_long);
                 i_needDistance = needDistance;
@@ -820,8 +824,8 @@ private:
                 message_motors.data = "data,getGPS";
                 publisher_motors->publish(message_motors);
                 usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
                 //*********************************************************************************
                 //OpenCV SHIT
                 //*********************************************************************************
@@ -937,8 +941,8 @@ private:
                 publisher_motors->publish(message_motors);
                 usleep(0.5 * microsecond);
                 
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
 
                 needDistance = find_distance(t_lat, t_long, current_lat, current_long);
                 i_needDistance = needDistance;
@@ -972,8 +976,8 @@ private:
                 message_motors.data = "data,getGPS";
                 publisher_motors->publish(message_motors);
                 usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
                 //*********************************************************************************
                 //OpenCV SHIT
                 //*********************************************************************************
@@ -1287,8 +1291,8 @@ private:
                     publisher_motors->publish(message_motors);
                     usleep(0.75 * microsecond);
                     
-                    current_lat = imu_command_gps(gps_string,1);
-                    current_long = imu_command_gps(gps_string,2);
+                    // current_lat = imu_command_gps(gps_string,1);
+                    // current_long = imu_command_gps(gps_string,2);
 
                     
                     gps_lat_target = current_lat + lat_offset;
@@ -1322,8 +1326,8 @@ private:
                 message_motors.data = "data,getGPS";
                 publisher_motors->publish(message_motors);
                 usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
 
                 if ((abs(current_lat - gps_lat_target) <= 0.00002) && \
                     ((abs(current_long - gps_long_target) <= 0.00002) ))
@@ -1397,8 +1401,8 @@ private:
                     usleep(1000);
                 }
                 std::cout << gps_string << std::endl;  
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
 
 
                 i_needHeading = find_facing(gps_lat_target, gps_long_target, \
@@ -1421,8 +1425,8 @@ private:
                 message_motors.data = "data,getGPS";
                 publisher_motors->publish(message_motors);
                 usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
                     
                 iterate++;
                 //FEEDBACK
@@ -1970,8 +1974,8 @@ private:
                     publisher_motors->publish(message_motors);
                     usleep(0.75 * microsecond);
                     
-                    current_lat = imu_command_gps(gps_string,1);
-                    current_long = imu_command_gps(gps_string,2);
+                    // current_lat = imu_command_gps(gps_string,1);
+                    // current_long = imu_command_gps(gps_string,2);
 
                     
                     gps_lat_target = current_lat + lat_offset;
@@ -2005,8 +2009,8 @@ private:
                 message_motors.data = "data,getGPS";
                 publisher_motors->publish(message_motors);
                 usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
+                // current_lat = imu_command_gps(gps_string,1);
+                // current_long = imu_command_gps(gps_string,2);
 
                 if ((abs(current_lat - gps_lat_target) <= 0.00002) && \
                     ((abs(current_long - gps_long_target) <= 0.00002) ))
