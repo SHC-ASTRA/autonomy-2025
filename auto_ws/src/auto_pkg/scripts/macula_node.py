@@ -26,7 +26,9 @@ class MaculaNode(Node):
         self.publisher_objects = self.create_publisher(Float32MultiArray, 'detected_objects', 10)
 
         self.i = 0
+        self.get_logger().info("Macula node has been started.")
 
+        # Get mode for Aruco Dection vs Object Detection
         mode = int(input("Enter 1 for ArUco Detection or 2 for Object Detection: "))
         if mode in [1, 2]:
             self.mode = mode
@@ -48,9 +50,13 @@ class MaculaNode(Node):
 
         # Load YOLOv8 model
         self.model = YOLO("./src/auto_pkg/models/best.pt") 
-        
+
         # Capture video frames using rtsp
-        rtsp_url = f"rtsp://admin:123456@192.168.1.12:554/mpeg4"
+        self.declare_parameter("camera_ip", 12) # Default to camera 12
+        camera_ip = self.get_parameter("camera_ip").get_parameter_value().integer_value
+        rtsp_url = f"rtsp://admin:123456@192.168.1.{camera_ip}:554/mpeg4"
+        self.get_logger().info(f"Connecting to RTSP stream: {rtsp_url}")
+
         self.cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if not self.cap.isOpened():
@@ -70,8 +76,7 @@ class MaculaNode(Node):
         self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))  
         self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))   
         self.out = cv2.VideoWriter(self.output_filename, self.fourcc, self.fps, (self.frame_width, self.frame_height))
-
-        self.get_logger().info("Macula node has been started.")
+        
         self.timer = self.create_timer(0.1, self.frame_mode)  # Timer to run at 10 Hz
     
     def update_frame(self):
@@ -162,7 +167,8 @@ class MaculaNode(Node):
             self.publisher_objects.publish(msg_objects)
         
         self.image_callback(frame)
-        # Show image
+
+        # ----------------------FOR DEBUG----------------------
         # cv2.imshow("Aruco Detection", frame)
         # cv2.waitKey(1)
 
