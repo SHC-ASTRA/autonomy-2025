@@ -29,7 +29,8 @@ class MaculaNode(Node):
         self.get_logger().info("Macula node has been started.")
 
         # Get mode for Aruco Dection vs Object Detection
-        mode = int(input("Enter 1 for ArUco Detection or 2 for Object Detection: "))
+        # mode = int(input("Enter 1 for ArUco Detection or 2 for Object Detection: "))
+        mode = 1
         if mode in [1, 2]:
             self.mode = mode
             self.get_logger().info(f"Mode set to {self.mode}")
@@ -136,7 +137,7 @@ class MaculaNode(Node):
             self.get_logger().info("No markers detected.")
 
         self.image_callback(image)
-        # Show image
+        # ----------------------FOR DEBUG----------------------
         # cv2.imshow("Aruco Detection", image)
         # cv2.waitKey(1)
 
