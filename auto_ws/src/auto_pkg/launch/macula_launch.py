@@ -24,5 +24,17 @@ def generate_launch_description():
         name='macula_node',
         output='screen',
         parameters=[{'camera_ip': LaunchConfiguration("camera_ip")}],    
-        ) 
+        ) ,
+        Node(
+        package='auto_pkg',
+        executable='auto_server',
+        name='auto_server',
+        output='screen',    
+        ) ,
+        Node(
+        package='auto_pkg',
+        executable='action_client.py',
+        name='macula_client',
+        output='screen',    
+        )
     ])
