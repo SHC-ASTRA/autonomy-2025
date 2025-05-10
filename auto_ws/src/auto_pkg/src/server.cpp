@@ -19,7 +19,7 @@
 #include "clucky_interfaces/action/auto_command.hpp"    //Interfaces
 
 // Local Includes
-#include "hippocampus.h"                              //Class files
+#include "hippocampus.h"                                //Class files
 #include "hippocampus.cpp"
 
 
