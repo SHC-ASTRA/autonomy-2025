@@ -13,7 +13,7 @@ find_package(clucky_interfaces REQUIRED)
 find_package(ros2_interfaces_pkg REQUIRED)
 find_package( OpenCV REQUIRED)
 
-add_executable(auto_server src/server.cpp)
+add_executable(auto_server src/starter_server.cpp)
 ament_target_dependencies(auto_server rclcpp rclcpp_action clucky_interfaces)
 target_include_directories(auto_server PUBLIC src/)
 
