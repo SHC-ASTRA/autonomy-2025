@@ -79,9 +79,6 @@ public:
       navigate_rover_subscriber_ = this->create_subscription<ros2_interfaces_pkg::msg::CoreFeedback>(
       "astra/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::topic_callback, this, _1));
 
-    //   obj_detect_subscriber_ = this->create_subscription<std_msgs::msg::String>(
-    //   "astra/auto/obj", 10, std::bind(&NavigateRoverSubscriberNode::topic_callback, this, _1));
-
     }
 
 private:
@@ -89,34 +86,7 @@ private:
     {
         current_lat = msg.gps_lat;
         current_long = msg.gps_long;
-        // std::string command;
-        // command = msg.data;
-        // RCLCPP_INFO(this->get_logger(), "Recieved: '%s'", msg.data.c_str());
-        
-
-        
-        // std::string delimiter = ",";
-        //     size_t pos = 0;
-        //     std::string token;
-        //     std::string scommand = command.c_str();
-        //     pos = scommand.find(delimiter);
-        //     token = scommand.substr(0, pos);
-            
-
-        // if (token == "orientation")
-        // {
-        //     RCLCPP_INFO(this->get_logger(), "Recieved IMU bearing");
-
-        //     //Turns command into the proper bearing
-            
-        //     imu_bearing = orientation_string(scommand); 
-        // }
-        // else if (token == "gps")
-        // {
-        //     RCLCPP_INFO(this->get_logger(), "Recieved GPS location");
-        //     //Turns command into GPS string
-        //     gps_string = command;
-        // }
+        imu_bearing = msg.orientation;
 
     }
 
