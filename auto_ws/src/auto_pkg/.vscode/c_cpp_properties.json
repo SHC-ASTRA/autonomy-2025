@@ -1,0 +1,28 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/ozy/ASTRA/rover-Autonomy/auto_ws/install/clucky_interfaces/include/**",
+        "/home/ozy/ASTRA/rover-Autonomy/auto_ws/install/auto_pkg/include/**",
+        "/home/ozy/ASTRA/rover-Autonomy/auto_ws/install/ros2_interfaces_pkg/include/**",
+        "/opt/ros/humble/include/**",
+        "${workspaceFolder}/../../devel/include",
+        "/usr/include/**",
+        "/usr/local/include/opencv4/**",
+        "~/opencv-4.x/**",
+        "~/opencv_contrib-4.x/**",
+        "~/build/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
