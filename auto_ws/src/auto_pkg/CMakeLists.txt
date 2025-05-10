@@ -10,6 +10,8 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(clucky_interfaces REQUIRED)
+find_package(ros2_interfaces_pkg REQUIRED)
+find_package( OpenCV REQUIRED)
 
 add_executable(auto_server src/server.cpp)
 ament_target_dependencies(auto_server rclcpp rclcpp_action clucky_interfaces)
