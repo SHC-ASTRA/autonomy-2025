@@ -1,0 +1,9 @@
+rtabmap:
+  ros__parameters:
+    frame_id: "camera_link"
+    subscribe_odom: false
+    use_sim_time: false
+    approx_sync: true
+    rgb_topic: "/camera/camera/color/image_raw"
+    depth_topic: "/camera/camera/depth/image_rect_raw"
+    camera_info_topic: "/camera/camera/color/camera_info"

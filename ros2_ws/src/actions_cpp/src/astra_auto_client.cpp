@@ -1,13 +1,11 @@
-//***********************************************
+//=============================================================================
 //rover-Autonomy server client
 //Sends instructions to the server
-//Last edited May 23, 2024
-//Version: 1.3
-//***********************************************
-//Maintained by: Daegan Brown
-//Number: 423-475-4384
-//Email: daeganbrown03@gmail.com
-//***********************************************
+//Last edited May 20, 2025
+//Version: 2.0
+//=============================================================================
+// Includes
+//=============================================================================
 #include <iostream>
 #include <chrono>
 
@@ -15,9 +13,18 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "astra_auto_interfaces/action/navigate_rover.hpp"
 
+
+//=============================================================================
+// Namespaces
+//=============================================================================
+
 using NavigateRover = astra_auto_interfaces::action::NavigateRover;
 using NavigateRoverGoalHandle = rclcpp_action::ClientGoalHandle<NavigateRover>;
 using namespace std::placeholders;
+
+//=============================================================================
+// Class Definition
+//=============================================================================
 
 class NavigateRoverClientNode : public rclcpp::Node 
 {
@@ -92,6 +99,10 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
     NavigateRoverGoalHandle::SharedPtr goal_handle;
 };
+
+//=============================================================================
+// Main
+//=============================================================================
 
 int main(int argc, char **argv)
 {

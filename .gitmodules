@@ -1,0 +1,10 @@
+[submodule "ros2_ws/src/ros2_interfaces_pkg"]
+	path = ros2_ws/src/ros2_interfaces_pkg
+	url = git@github.com:SHC-ASTRA/ros2_interfaces_pkg.git
+[submodule "ros2_ws/src/rtabmap"]
+	path = ros2_ws/src/rtabmap
+	url = https://github.com/introlab/rtabmap.git
+[submodule "ros2_ws/src/rtabmap_ros"]
+	path = ros2_ws/src/rtabmap_ros
+	url = https://github.com/introlab/rtabmap_ros.git
+	branch = ros2

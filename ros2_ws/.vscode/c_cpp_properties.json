@@ -6,14 +6,13 @@
         "limitSymbolsToIncludedHeaders": false
       },
       "includePath": [
-        "~/rover-Autonomy/ros2_ws/install/astra_auto_interfaces/include/**",
+        "${workspaceFolder}/**",
         "/opt/ros/humble/include/**",
-        "~/rover-Autonomy/ros2_ws/src/actions_cpp/include/**",
+        "${workspaceFolder}/install/**",
         "/usr/include/**",
-        "/usr/local/include/opencv4/**",
-        "~/opencv-4.x/**",
-        "~/opencv_contrib-4.x/**",
-        "~/build/**"
+        "/usr/include/c++/**",
+        "/usr/local/include/**",
+        "/usr/local/includ/opencv**"
 
       ],
       "name": "ROS",
