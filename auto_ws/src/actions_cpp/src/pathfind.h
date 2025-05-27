@@ -55,9 +55,7 @@ int find_facing(double gps_lat_target, double gps_long_target, \
 //Input is GPS targets then GPS currents
 float find_distance(double gps_lat_target, double gps_long_target, \
     double current_lat, double current_long) 
-{
-            
-            
+{        
     double deg2rad = (180.0/3.141592);
     double deltaLat = deg2rad * gps_lat_target - current_lat;
     double deltaLong = deg2rad * gps_long_target - current_long;

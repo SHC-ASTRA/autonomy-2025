@@ -18,7 +18,7 @@
 #include <cmath>                            // sin, cos, tan2
 
 //Made by Daegan Brown for ASTRA
-#include "pathfind.h"                       // My functions
+// #include "pathfind.h"                       // My functions
 
 //ROS2 includes
 #include "rclcpp/rclcpp.hpp"                // General ROS2 stuff
@@ -41,6 +41,7 @@
 #include "ros2_interfaces_pkg/msg/core_control.hpp"
 #include "ros2_interfaces_pkg/msg/auto_feedback.hpp"
 #include "ros2_interfaces_pkg/msg/auto_nav.hpp" 
+// #include "ros2_interfaces_pkg/msg/"
 
 //============
 // Definitions
@@ -73,6 +74,7 @@ int sats;
 // Flags
 bool canceled = 0;
 bool coreWait = 1;                  // Is it waiting on /core/feedback?
+bool anchorWait = 0;                // Is it waiting on /anchor/core/feedback?
 bool arucoFound = 0;
 bool objectFound = 0;
 bool navFail = 0;
@@ -80,9 +82,9 @@ bool navFail = 0;
 
 
 
-//=============================================================================
-//ROS2 Listener Nodes
-//=============================================================================
+//===========================================================================//
+//= ROS2 Listener Nodes                                                     =//
+//===========================================================================//
 
 
 // Node for subcribing to topics
@@ -93,15 +95,19 @@ public:
     NavigateRoverSubscriberNode() : Node("navigate_rover_subscriber")
     {
         subscriber_core_ = this->create_subscription<ros2_interfaces_pkg::msg::CoreFeedback>(
-            "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::topic_callback, this, _1));
+            "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::core_callback, this, _1));
+        subscriber_anchor_ = this->create_subscription<std_msgs::msg::String>(
+            "/anchor/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::anchor_callback, this, _1));
+        subscriber_macula_ = this->create_subscription<ros2_interfaces_pkg::msg::Macula
+        
         
 
     }
 private:
-    //=========================================================================
-    // Subscriber Topic Callback
-    //=========================================================================
-    void topic_callback(const ros2_interfaces_pkg::msg::CoreFeedback & msg) 
+    //=======================================================================//
+    //= Subscriber Topic Callback                                           =//
+    //=======================================================================//
+    void core_callback(const ros2_interfaces_pkg::msg::CoreFeedback & msg) 
     {
         if (coreWait)
         {
@@ -119,20 +125,30 @@ private:
         RCLCPP_DEBUG(this->get_logger(), "With '%d' satellites", sats);
     }
 
+    void anchor_callback(const std_msgs::msg::String & msg)
+    {
+        if (anchorWait == 0)
+            return;
+        if (msg.data == "")
+        {
+            anchorWait = 0;
+        }
+    }
     rclcpp::Subscription<ros2_interfaces_pkg::msg::CoreFeedback>::SharedPtr subscriber_core_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscriber_anchor_;
 
 };
 
-//=============================================================================
-// ROS2 Server Node
-//=============================================================================
+//===========================================================================//
+//= ROS2 Server Node                                                         =//
+//===========================================================================//
 // Node for the action server
 class NavigateRoverServerNode : public rclcpp::Node 
 {
 public:
-    //=========================================================================
-    // Constructor
-    //=========================================================================
+    //=======================================================================//
+    //= Constructor                                                         =//
+    //=======================================================================//
     NavigateRoverServerNode() : Node("navigate_rover_server"), count_(0) 
     {
         cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
@@ -163,9 +179,9 @@ public:
     }
     
 private:
-    //=========================================================================
-    // Internal Variables
-    //=========================================================================
+    //=======================================================================//
+    //= Internal Variables                                                  =//
+    //=======================================================================//
     // Mission Info
     int mission_type;
     double target_lat;
@@ -175,10 +191,18 @@ private:
 
     // Derived info 
     float target_bearing;
+    float distance_remaining;
 
-    //=========================================================================
+
+    //=======================================================================//
+    //= ROS2 Action Standard Functions                                      =//
+    //=======================================================================//
+    
+    //-------------------------------------------------------------------------
     // Callback of recieved Goal
-    //=========================================================================
+    // This function handles accepting/rejecting goal
+    // TODO: Add a check to make sure within 2km range
+    //-------------------------------------------------------------------------
     rclcpp_action::GoalResponse goal_callback(
         const rclcpp_action::GoalUUID &uuid, std::shared_ptr<const NavigateRover::Goal> goal)
     {
@@ -194,56 +218,57 @@ private:
         // Acceptable, then proceed
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
-    //=========================================================================
+    //-------------------------------------------------------------------------
     // Cancelling the Goal
-    //=========================================================================
+    // This function runs when a cancel request is receieved
+    //-------------------------------------------------------------------------
     rclcpp_action::CancelResponse cancel_callback(
         const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
     {
         // Get rid of stdr output at build
         (void)goal_handle;
-        std::string rover_command;
-        auto message_motors = std_msgs::msg::String();
+        // Stop rover
+        set_motors(0);
 
-        rover_command = "ctrl,0,0";  
-        message_motors.data = rover_command;
-        
-
-        publisher_motors->publish(message_motors);
-
-        //FEEDBACK
-        RCLCPP_INFO(this->get_logger(), "Recieved Goal Cancel Request but WONT FUCKIN DO IT");
+        // Feedback
+        publish_info("Recieved Goal Cancel Request but WONT FUCKIN DO IT");
         cancel_request = true;
         
         return rclcpp_action::CancelResponse::ACCEPT;
     }
-    //=========================================================================
-    // Once Accepted
-    //=========================================================================
+    //-------------------------------------------------------------------------
+    // Handle Callback
+    // This function is called when a goal is accepted
+    // Currently logs that, stores goal variables, and then executes goal
+    //-------------------------------------------------------------------------
     void handle_accepted_callback(
         const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
     {
-        
-        RCLCPP_INFO(this->get_logger(), "Executing the goal");
-        legacy_execute_goal(goal_handle);
-    }
-    //=========================================================================
-    // Execution of the Goal
-    //=========================================================================
-    void execute_goal(
-        const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
-    {
-        // Set microsecond values for usleep command
-        auto result = std::make_shared<NavigateRover::Result>();
-
-        // Get action goal data
+        // First save goal variables
         mission_type = goal_handle->get_goal()->mission_type;
         target_lat = goal_handle->get_goal()->gps_lat_target;
         target_long = goal_handle->get_goal()->gps_long_target;
         target_radius = goal_handle->get_goal()->target_radius;
         period = goal_handle->get_goal()->period;
 
-        publish_info("Recieved New Goal");
+        // Execute the goal
+        publish_info("Goal was accepted, now executing");
+        execute_goal(goal_handle);
+    }
+    //-------------------------------------------------------------------------
+    // Execution of the Goal
+    // This is *the* function that handles the goal. The big boy. 
+    //-------------------------------------------------------------------------
+    void execute_goal(
+        const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
+    {
+        // Create result variable
+        auto result = std::make_shared<NavigateRover::Result>();
+
+        // Set rate
+        rclcpp::Rate loop_rate(1.0/period);
+
+        // Set LED to RED
         set_led(1);                         // Red
 
         // Check status
@@ -269,9 +294,8 @@ private:
                     set_led(3);
                     usleep(4 * SECOND);
                     set_led(1);
-                    // Face target
-                    float target_bearing = (float)find_facing(target_lat, target_long,
-                        current_lat, current_long);
+                    // Update bearing and orient to it
+                    set_bearing();
                     orient(target_bearing);
                         result->final_result = 1;
                 }
@@ -282,7 +306,7 @@ private:
             // repeat until within target radius or goal is canceled.
             //-----------------------------------------------------------------
             case 1:
-                while (!(checkTarget()) && !(goal_handle->is_canceling()) && !(navFail))
+                while (!(check_target()) && !(goal_handle->is_canceling()) && !(navFail))
                 {
 
                 }
@@ -417,464 +441,9 @@ private:
             publisher_motors->publish(message_motors);
         }
 
-        // GNSS Goal
-        else if (navigate_type == 1)
-        {
-            //FEEDBACK
-            message_feedback.data = "Starting navigation to GNSS point";
-            publisher_feedback->publish(message_feedback);
-
-            //Make Rover face North, announce chosen task,
-            message_motors.data = "auto,turningTo,15000,0";
-            publisher_motors->publish(message_motors);
-            std::cout << "Selected GPS targeting" << std::endl;
-
-            //This loop gets the rover to continually get closer to the GPS 
-            //target until it is within a half meter. 
-            while (iterate == 0) // REMOVE THIS SHIT, make it  || not_canceld, essentially
-            {
-                
-                
-                message_motors.data = "data,getOrientation";
-                publisher_motors->publish(message_motors);
-                usleep(0.5 * microsecond);
-                
-                
-
-                message_motors.data = "data,sendGPS";
-                publisher_motors->publish(message_motors);
-                usleep(0.5 * microsecond);
-                
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
-
-                needDistance = find_distance(gps_lat_target, gps_long_target, current_lat, current_long);
-                i_needDistance = needDistance;
-                RCLCPP_INFO(this->get_logger(), "Remaining distance: '%d'", i_needDistance);
-
-
-                i_needHeading = find_facing(gps_lat_target, gps_long_target, current_lat, current_long);
-                
-                
-                std::cout << std::fixed << "Calculated Heading: " << i_needHeading << std::endl \
-                    << std::endl << std::endl << std::endl;
-
-
-                message_motors.data = "auto,turningTo,15000," + std::to_string(i_needHeading);
-                publisher_motors->publish(message_motors);
-                usleep(3.5 * microsecond);
-
-                
-                rover_command = "ctrl,-0.6,-0.6";  
-                message_motors.data = rover_command;
-                RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message_motors.data.c_str());
-                publisher_motors->publish(message_motors);
-                usleep(1.5 * microsecond);
-                
-
-                rover_command = "ctrl,0,0";  
-                message_motors.data = rover_command;
-                RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message_motors.data.c_str());
-                publisher_motors->publish(message_motors);
-
-                message_motors.data = "data,getGPS";
-                publisher_motors->publish(message_motors);
-                usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
-
-                if ((abs(current_lat - gps_lat_target) <= 0.000018) && \
-                    ((abs(current_long - gps_long_target) <= 0.000018) ))
-                {
-                    
-                    iterate++;
-                    //FEEDBACK
-                    message_feedback.data = "Arrived at point";
-                    publisher_feedback->publish(message_feedback);
-                }
-                
-            }
-             
-            message_motors.data = "led_set,0,0,300";
-            publisher_motors->publish(message_motors);
-            RCLCPP_INFO(this->get_logger(), "Arrived at location"); 
-            std::cout << "Arrived at location!";           
-            
-        }
-
-        // Aruco Goal
-        else if (navigate_type == 2)
-        {
-            
-        }
-
-        // Object Detection Goal
-        else if (navigate_type == 3)
-        {
-
-        }
-
-
-        //*****************************************************************************************
-        // Debug Goals
-        //*****************************************************************************************
-
-
-        // DEBUG 1
-        //This is a test loop. Same code as 1, the only difference is instead of drving until it 
-        //reaches the point, it faces it once, drives towards it once, then is done. 
-        else if (navigate_type == 4)
-        {
-            //FEEDBACK
-            message_feedback.data = "Selected DEBUG 1: Non iterating GNSS Navigation";
-            publisher_feedback->publish(message_feedback);
-            std::cout << "Selected GPS targeting, but once" << std::endl;
-            while (iterate == 0)
-            {
-                message_motors.data = "auto,turningTo,15000,0";
-                
-                publisher_motors->publish(message_motors);
-                //usleep(15 * microsecond);
-                
-                
-                
-                message_motors.data = "data,getOrientation";
-                publisher_motors->publish(message_motors);
-                usleep(3 * microsecond);
-                for (int i; i<5000; i++)
-                {
-                    usleep(1000);
-                }
-
-                message_motors.data = "data,sendGPS";
-                publisher_motors->publish(message_motors);
-                //usleep(3 * microsecond);
-                for (int i; i<5000; i++)
-                {
-                    usleep(1000);
-                }
-                std::cout << gps_string << std::endl;  
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
-
-
-                i_needHeading = find_facing(gps_lat_target, gps_long_target, \
-                    current_lat, current_long);
-                
-                
-                std::cout << std::fixed << "Calculated Heading: " << i_needHeading << std::endl \
-                    << std::endl << std::endl << std::endl;
-
-
-                message_motors.data = "auto,turningTo,15000," + std::to_string(i_needHeading);
-                publisher_motors->publish(message_motors);
-                usleep(15 * microsecond);
-
-                rover_command = "ctrl,0,0";  
-                message_motors.data = rover_command;
-                RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message_motors.data.c_str());
-                publisher_motors->publish(message_motors);
-
-                message_motors.data = "data,getGPS";
-                publisher_motors->publish(message_motors);
-                usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
-                    
-                iterate++;
-                //FEEDBACK
-                message_feedback.data = "Finished DEBUG 1";
-                publisher_feedback->publish(message_feedback);
-                
-            }
-        }
-
-        // DEBUG 2
-        else if (navigate_type == 5)
-        {
-            //FEEDBACK
-            message_feedback.data = "Selected DEBUG 2: Test motors and IMU";
-            publisher_feedback->publish(message_feedback);
-
-
-            rover_command = "ctrl,-.50,-.50";
-            message_motors.data = rover_command;
-            RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message_motors.data.c_str());
-            publisher_motors->publish(message_motors);
-            usleep(3.0 * microsecond);
-
-            rover_command = "ctrl,0.0,0.0";
-            message_motors.data = rover_command;
-            RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message_motors.data.c_str());
-            publisher_motors->publish(message_motors);
-            usleep(1.5 * microsecond);
-
-
-            // rover_command = "auto,turningTo,15000,180";
-            // message_motors.data = rover_command;
-            // publisher_motors->publish(message_motors);
-            // usleep(15.0 * microsecond);
-
-            //FEEDBACK
-            message_feedback.data = "Finished DEBUG 2: Testing";
-            publisher_feedback->publish(message_feedback);
-        }
         
-        // DEBUG 3 
-        //Rectilinear search pattern, mostly for SAR filming
-        else if (navigate_type == 6)
-        {
-            //FEEDBACK
-            message_feedback.data = "Selected DEBUG 3: Test Search Pattern";
-            publisher_feedback->publish(message_feedback);
-
-
-            std::cout << "Selected Square Search Pattern" << std::endl;
-            message_motors.data = "led_set,303,0,0";
-            publisher_motors->publish(message_motors);
-            RCLCPP_INFO(this->get_logger(), "Begining Search");
-            //
-            for (int j = 0; j < gps_lat_target; j++)
-            {
-                //Rover faces North
-                message_motors.data = "auto,turningTo,15000,350";
-                publisher_motors->publish(message_motors);
-                usleep(5 * microsecond);
-
-                //Begins driving forward at 40% speed
-                message_motors.data = "ctrl,-0.4,-0.4";
-                publisher_motors->publish(message_motors);
-                //Rover waits for the third input seconds before stopping
-                usleep(gps_long_target * microsecond);
-                message_motors.data = "ctrl,0.0,0.0";
-                publisher_motors->publish(message_motors);
-                //Rover faces East
-                message_motors.data = "auto,turningTo,15000,80";
-                publisher_motors->publish(message_motors);
-                usleep(5 * microsecond);
-
-                //Rover moves forward for a second before stopping againt
-                message_motors.data = "ctrl,-0.4,-0.4";
-                publisher_motors->publish(message_motors);
-                usleep(4 * microsecond);
-                message_motors.data = "ctrl,0.0,0.0";
-                publisher_motors->publish(message_motors);
-                //Rover faces South and drives that way for the same amount of time before stopping
-                message_motors.data = "auto,turningTo,15000,170";
-                publisher_motors->publish(message_motors);
-                usleep(5 * microsecond);
-                message_motors.data = "ctrl,-0.4,-0.4";
-                publisher_motors->publish(message_motors);
-                usleep(gps_long_target * microsecond);
-                message_motors.data = "ctrl,0.0,0.0";
-                publisher_motors->publish(message_motors);
-                //Faces East again, moves forward one second, and stops the loop
-                message_motors.data = "auto,turningTo,15000,80";
-                publisher_motors->publish(message_motors);
-                usleep(5 * microsecond);
-                message_motors.data = "ctrl,-0.4,-0.4";
-                publisher_motors->publish(message_motors);
-                usleep(4 * microsecond);
-                message_motors.data = "ctrl,0.0,0.0";
-                publisher_motors->publish(message_motors);
-            }
-            //FEEDBACK
-            message_feedback.data = "Finished DEBUG 3: Area Searched";
-            publisher_feedback->publish(message_feedback);
-        }
-        
-        // DEBUG 4
-        else if (navigate_type == 7)
-        {
-            //FEEDBACK
-            message_feedback.data = "Selected DEBUG 4: ARUCO Test";
-            publisher_feedback->publish(message_feedback);
-
-            std::cout << "Looking For ARCUO" << std::endl;
-            int cameraNum;
-            std::cin >> cameraNum;
-            cv::VideoCapture inputVideo(cameraNum);
-            
-            
-            //inputVideo.open(cameraNum);
-            cv::aruco::DetectorParameters detectorParams = cv::aruco::DetectorParameters();
-            cv::aruco::Dictionary dictionary = \
-                cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
-            cv::aruco::ArucoDetector detector(dictionary, detectorParams);
-
-
-
-            //cv::Size S = cv::Size((int) inputVideo.get(cv::CAP_PROP_FRAME_WIDTH), // Acquire input size
-              //  (int) inputVideo.get(cv::CAP_PROP_FRAME_HEIGHT));
-
-            //cv::VideoWriter writer;
-            //int codec = cv::VideoWriter::fourcc('a', 'v', 'c', '1');
-            //double fps = 15.0;
-            //std::string filename = "footage.mp4";
-            //cv::Size sizeFrame(640,480);
-            //writer.open(filename, codec, fps, sizeFrame, true);
-            //cv::Mat cameraMatrix, distCoeffs;
-            //float markerLength = 0.05;
-
-            //readCameraParameters(cameraParamsFilename, cameraMatrix, distCoeffs);
-
-            //cv::Mat objPoints(4, 1, CV_32FC3);
-            //objPoints.ptr<cv::Vec3f>(0)[0] = cv::Vec3f(-markerLength/2.f, markerLength/2.f, 0);
-            //objPoints.ptr<cv::Vec3f>(0)[1] = cv::Vec3f(markerLength/2.f, markerLength/2.f, 0);
-            //objPoints.ptr<cv::Vec3f>(0)[2] = cv::Vec3f(markerLength/2.f, -markerLength/2.f, 0);
-            //objPoints.ptr<cv::Vec3f>(0)[3] = cv::Vec3f(-markerLength/2.f, -markerLength/2.f, 0);
-
-            cv::Mat image, imageCopy;
-            std::vector<int> ids;
-            std::vector<std::vector<cv::Point2f>> corners, rejected;
-            inputVideo >> image;
-            std::cout << "Video Prepared" << std::endl;
-
-
-            cv::Mat res;
-            std::vector<cv::Mat> spl;
-            cv::VideoWriter outputVideo;    
-            // select desired codec (must be available at runtime)
-            int codec = cv::VideoWriter::fourcc('H', '2', '6', '4');  
-            double fps = 25.0;                          // framerate of the created video stream
-            std::string filename = "./live.mp4";             // name of the output video file
-            outputVideo.open(filename, codec, fps, image.size(), true);
-            // check if we succeeded
-            if (!outputVideo.isOpened()) {
-                std::cerr << "Could not open the output video file for write\n";
-                
-                }
-
-
-
-            std::cout << "Output prepared" << std::endl;
-
-            int iterateIT = 0;
-            while (inputVideo.grab()) 
-                {
-                iterateIT ++;
-                cv::Mat image, imageCopy;
-                inputVideo.retrieve(image);
-                image.copyTo(imageCopy);
-                //std::vector<int> ids;
-                //std::vector<std::vector<cv::Point2f>> corners, rejected;
-                detector.detectMarkers(image, corners, ids, rejected);
-                // if at least one marker detected
-                if (ids.size() > 0)
-                    cv::aruco::drawDetectedMarkers(imageCopy, corners, ids);
-
-                //int nMarkers = corner.size();
-                //std::vector<cv::Vec3d> rvecs(nMarkers), tvecs(nMarkers);
-
-                //Calculate pose for each marker
-                //for (int i = 0; i < nMarkers; i++)
-                //{
-                //solvePnP(objPoints, corner.at(i), cameraMatrix, distCoeffs, rvecs.at(i), tvecs.at(i));
-                //}
-
-                //Draw Axis for each marker
-                //for (unsigned int i = 0; i < ids.size(); i++)
-                //{
-                //    cv::drawFrameAxes(imageCopy, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1)
-                //}
-
-                outputVideo.write(imageCopy);
-
-
-
-
-                cv::imshow("out", imageCopy);
-                //inputVideo >> imageCopy;
-                //cv::Mat xframe;
-                //resize(imageCopy, xframe, sizeFrame);
-                //writer.write(xframe);
-
-
-                //split(src, spl);                // process - extract only the correct channel
-                //for (int i =0; i < 3; ++i)
-                //{
-                    
-                //spl[i] = cv::Mat::zeros(S, spl[0].type());
-                //    
-                //}
-                //merge(spl, res);
-
-               // outputVideo.write(imageCopy);
-                //outputVideo.write(res); //save or
-                //outputVideo << res;
-
-                //int waitTime = 1;
-                char key = (char) cv::waitKey(1);
-                if (key == 27)
-                //std::cout << iterateIT << std::endl;
-                //if (iterateIT >= 90)
-                {
-                    break;
-                }
-                
-                
-
-                }
-               
-
-            std::cout << "Finished filming!" << std::endl;
-            inputVideo.release();
-            //writer.release();
-        }   
-
-        // DEBUG 5
-        else if (navigate_type == 8)
-        {
-            //FEEDBACK
-            message_feedback.data = "Selected DEBUG 5: ??????????";
-            publisher_feedback->publish(message_feedback);
-
-             // Get the message describing the goal
-            auto feedback_msg = std::make_shared<NavigateRover::Feedback>();
-            // 
-            auto &status_message = feedback_msg->current_status;
-
-            status_message = 99;
-
-
-            // Send some data back to the goal
-            for (int i = 0; i < 2; i++) goal_handle->publish_feedback(feedback_msg);
-
-            usleep(5000);
-            if (rclcpp::ok()) {
-            // Publish the result
-            auto result = std::make_shared<NavigateRover::Result>();
-            result->final_result = 10;
-
-            
-            }
-        }
-
-        // DEBUG 6
-        else if (navigate_type == 9)
-        {
-            //FEEDBACK
-            message_feedback.data = "Selected DEBUG 6: Counting to 500";
-            publisher_feedback->publish(message_feedback);
-
-            for (int i = 0; i <= 500; i++)
-            {
-                if (goal_handle->is_canceling())
-                {
-                    goal_handle->canceled(0);
-                    return;
-                }
-                std::cout << i << std::endl;
-                usleep(.1 * microsecond);
-            }
-        }   
-
-        //*****************************************************************************************
-        // Internal Goals
-        //*****************************************************************************************
-
         // INTERNAL 1
-        else if (navigate_type == 10)
+        if (navigate_type == 10)
         {
             //FEEDBACK
             message_feedback.data = "Aruco Tag detected! Homing in";
@@ -1234,50 +803,26 @@ private:
         result->final_result = final_result;
         goal_handle->succeed(result);
     }
-
-    //Subscriber to astra/core/feedback
     
-    //=========================================================================
-    // DEBUG This shouldn't be here...
-    //=========================================================================
-    void topic_callback(const std_msgs::msg::String & msg) 
-    {
-        std::string command;
-        command = msg.data;
-        RCLCPP_INFO(this->get_logger(), "Recieved: '%s'", msg.data.c_str());
-        
+    
+    //=======================================================================//
+    //= Direct Rover Control Commands                                       =//
+    //=======================================================================//
+    // These functions directly control the rover, either through 
+    // /core/control or through /anchor/relay
 
-        
-        std::string delimiter = ",";
-            size_t pos = 0;
-            std::string token;
-            std::string token1;
-            std::string scommand = command.c_str();
-            pos = scommand.find(delimiter);
-            token = scommand.substr(0, pos);
-            
 
-        if (token == "orientation")
-        {
-            RCLCPP_INFO(this->get_logger(), "Recieved IMU bearing");
-            //Turns command into the proper bearing
-            //imu_bearing = imu_command(command); 
-        }
-        else if (token == "gps")
-        {
-            RCLCPP_INFO(this->get_logger(), "Recieved GPS location");
-            //Turns command into GPS string
-            gps_string = command;
-        }
 
-    }
-
-    //=========================================================================
+    //-------------------------------------------------------------------------
     // Set motors
-    //=========================================================================
-
+    // Currently three states to control motors:
+    // 0: Stopped
+    // 1: Going Forward
+    // 2: GOing Backward
+    //-------------------------------------------------------------------------
     void set_motors(int state)
     {
+        publish_debug("Running Function: set_motors()");
         auto message = ros2_interfaces_pkg::msg::CoreControl();
 
         // Stop
@@ -1317,12 +862,15 @@ private:
 
     }
 
-    //=========================================================================
+    //-------------------------------------------------------------------------
     // Orient To
-    //=========================================================================
+    // Input a bearing, and the function will continue until the rover is 
+    // within 2 degree of that target bearing
+    //-------------------------------------------------------------------------
     
     void orient(float bearing)
     {
+        publish_debug("Running Function: orient()");
         // Create and populate message and 
         auto message = ros2_interfaces_pkg::msg::CoreControl();
         message.turn_to_enable = false;
@@ -1339,89 +887,147 @@ private:
             for (int i = 0; i < 11; i++)
             {
                 confirm_core();
-                if (abs(current_heading - bearing) <= 1)
+                if (abs(current_heading - bearing) <= 2)
                     break;
                 usleep(SECOND);
             }
-        } while (abs(current_heading - bearing) <= 1);
+        } while (abs(current_heading - bearing) <= 2);
             
         
     }
 
-    //=========================================================================
-    // Head to Point
-    // Orients, then goes towards point relative to distance left.
-    //=========================================================================
-
-    void head_to_point()
+    //-------------------------------------------------------------------------
+    // Legacy Navigate
+    // Orients, then goes towards point relative to distance left
+    // Upgraded legacy URC 2024 code
+    //-------------------------------------------------------------------------
+    void legacy_nav()
     {
-        confirm_core();
+        publish_debug("Running Function: legacy_nav()");
+        publish_info("Begining Legacy point-to-point navigation");
+        while (!(check_target()) && !canceled)
+        {
+            refresh();
+            orient(target_bearing);
+            if (distance_remaining >= 15)
+                drive_meters(10);
+            else if (distance_remaining >= 10)
+                drive_meters(5);
+            else if (distance_remaining >= 5)
+                drive_meters(1);
+        }
     }
 
-    //=========================================================================
+    
+    
+    //-------------------------------------------------------------------------
+    // Set LED
+    // Changes LED color
+    // 0 = OFF
+    // 1 = RED
+    // 2 = GREEN
+    // 3 = BLUE
+    //-------------------------------------------------------------------------
+    void set_led(int color)
+    {
+        publish_debug("Running Function: set_led()");
+        auto command = std_msgs::msg::String();
+        
+        switch (color) {
+            case 0:
+            publish_info("Turning off LED");
+            command.data = "led_set,0,0,0";
+            break;
+            case 1:
+            publish_info("Turning LED red");
+            command.data = "led_set,255,0,0";
+            break;
+            case 2:
+            publish_info("Turning LED Green");
+            command.data = "led_set,0,255,0";
+            break;
+            case 3:
+            publish_info("Turning LED Blue");
+            command.data = "led_set,0,0,255";
+            break;
+            default:
+            publish_info("Turning off LED");
+            publish_warn("Recieved unknown LED command. Turning off LED and proceeding");
+            command.data = "led_set,0,0,0";
+            break;
+            
+        }
+        publisher_anchor->publish(command);
+    }
+    
+    //-------------------------------------------------------------------------
+    // Drive Meters
+    // This function sends to /anchro/relay a command to drive the rover
+    // x meters forward (backwards if negative)
+    //-------------------------------------------------------------------------
+    void drive_meters(float meters)
+    {
+        publish_debug("Running Function: drive_meters()");
+        auto command = std_msgs::msg::String();
+        std::string scommand = "driveMeters," + std::to_string(meters);
+        command.data = scommand.c_str();
+
+        anchorWait = 1;
+        while(anchorWait == 1)
+        {
+            usleep(0.25 * SECOND);
+            publisher_anchor->publish(command);
+        }
+        // Stop
+        set_motors(0);
+        publish_debug("Went the distance");
+    }
+
+    
+    
+    //=======================================================================//
+    //= Refresh Functions                                                   =//
+    //=======================================================================//
+    // These funtions refresh local variables or wait for input to refresh
+    // said variables
+    
+    //-------------------------------------------------------------------------
+    // Refresh
+    // This function refreshes internal gps, bearing, bearing target, and 
+    // distance remaining variables.
+    //-------------------------------------------------------------------------
+    void refresh()
+    {
+        publish_debug("Running Function: refresh()");
+        confirm_core();
+        set_bearing();
+        set_distance_remaining();
+        publish_debug("Data refreshed!");
+    }
+
+    //-------------------------------------------------------------------------
     // Confirm Core data (gps, bearing)
-    //=========================================================================
+    // This function waits until we recieved new message on /core/feedback
+    //-------------------------------------------------------------------------
 
     void confirm_core()
     {
+        publish_debug("Running Function: confirm_core()");
         publish_debug("Waiting for /core/feedback");
         coreWait = 1;
         while (coreWait);
         publish_debug("Recieved /core/feedback");
     }
 
-    //=========================================================================
-    // Legacy Search
-    //=========================================================================
-
-    void legacy_search()
+    //-------------------------------------------------------------------------
+    // Check Target
+    // This functions checks if we are within 1.5 meters of target.
+    // It returns true if we are, otherwise returns false. 
+    //-------------------------------------------------------------------------
+    bool check_target()
     {
-
-    }
-    
-    //=========================================================================
-    // Set LED
-    //=========================================================================
-    // 0 = OFF
-    // 1 = RED
-    // 2 = GREEN
-    // 3 = BLUE
-    void set_led(int color)
-    {
-        auto command = std_msgs::msg::String();
-
-        switch (color) {
-            case 0:
-                publish_info("Turning off LED");
-                command.data = "led_set,0,0,0";
-                break;
-            case 1:
-                publish_info("Turning LED red");
-                command.data = "led_set,255,0,0";
-                break;
-            case 2:
-                publish_info("Turning LED Green");
-                command.data = "led_set,0,255,0";
-                break;
-            case 3:
-                publish_info("Turning LED Blue");
-                command.data = "led_set,0,0,255";
-                break;
-            default:
-                publish_info("Turning off LED");
-                publish_warn("Recieved unknown LED command. Turning off LED and proceeding");
-                command.data = "led_set,0,0,0";
-                break;
-
-        }
-        publisher_anchor->publish(command);
-    }
-
-    bool checkTarget()
-    {
-        coreWait = 1;
-        publish_debug("Waiting for core feedback before checking target");
-        while (coreWait);
+        publish_debug("Running Function: check_target()");
+        confirm_core();
         if ((abs(current_lat - target_lat) <= 0.000018) && \
             ((abs(current_long - target_long) <= 0.000018)))
         {
@@ -1432,18 +1038,81 @@ private:
             return false;
     }
 
-    //=========================================================================
+
+    //-------------------------------------------------------------------------
     // Set Target Bearing
-    //=========================================================================
-    
+    // This function resets the internal target_bearing variable to needed one, 
+    // based on up-to-date gps data
+    //-------------------------------------------------------------------------
     void set_bearing()
+    {
+        publish_debug("Running Function: set_bearing()");
+        double X, Y, neededHeading;
+        double deltaLong = target_long - current_long;
+        double deg2rad = (3.131592/180);
+        double rad2deg = (180/3.141592);
+        int i_neededHeading;
+
+        X = ( std::cos(deg2rad * target_lat) * std::sin(deg2rad * deltaLong));
+        Y = ( std::cos(deg2rad * current_lat) * std::sin( deg2rad * target_lat))\
+            - (std::sin(deg2rad * current_lat) * std::cos(deg2rad * target_lat) * \
+            std::cos(deg2rad * deltaLong));
+        neededHeading = (rad2deg * atan2(X,Y)) + 360;
+
+        i_neededHeading = neededHeading;
+        i_neededHeading = i_neededHeading % 360;
+        target_bearing = (float)i_neededHeading;
+    }
+
+    //-------------------------------------------------------------------------
+    // Set Distance remaining
+    // This function resets the interanl distance_remaining variable to the 
+    // correct one, based on up-to-date gps data
+    //-------------------------------------------------------------------------
+    void set_distance_remaining()
+    {
+        publish_debug("Running Function: set_distance_remaining()");
+        double deg2rad = (180.0/3.141592);
+        double deltaLat = deg2rad * target_lat - current_lat;
+        double deltaLong = deg2rad * target_long - current_long;
+        double a;
+        double c;
+        double d;
+        int R = 6371000;    // Earth Radius
+
+        // Haversine formula
+        a = (std::sin(deltaLat / 2) * std::sin(deltaLat / 2)) + \
+            (std::cos(deg2rad * current_lat) * std::cos(deg2rad * target_lat) * \
+            (std::sin(deltaLong / 2) * std::sin(deltaLat / 2)));
+        c = 2 * atan2(sqrt(a), sqrt(1-a));
+        d = R * c;
+
+        distance_remaining = d;
+    }
+
+
+    //=======================================================================//
+    //= Internal Calculations                                               =//
+    //=======================================================================//
+    // Internal calculations and such. 
+
+    //-------------------------------------------------------------------------
+    // Aruco Homing
+    // This function is called when an AruCo tag is detected, to calculate the
+    // distance to it 
+    //-------------------------------------------------------------------------
+    float aruco_homing()
     {
 
     }
+    //=======================================================================//
+    //= ROS2 Shortcuts                                                      =//
+    //=======================================================================//
+    // Ways to make ROS2 easier to write
 
-    //=========================================================================
+    //-------------------------------------------------------------------------
     // Publish Debug, Info, Warn, Error, Fatal
-    //=========================================================================
+    //-------------------------------------------------------------------------
     
     void publish_debug(const char * msg)
     {
@@ -1466,11 +1135,10 @@ private:
         RCLCPP_FATAL(this->get_logger(), msg);
     }
 
-
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_motors;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_feedback;
+    //=======================================================================//
+    //= ROS2 Declarations                                                   =//
+    //=======================================================================//
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_anchor;
-    //rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscription_;
     rclcpp::Publisher<ros2_interfaces_pkg::msg::CoreControl>::SharedPtr publisher_core;
     rclcpp::Publisher<ros2_interfaces_pkg::msg::AutoNav>::SharedPtr publisher_nav;
     size_t count_;
