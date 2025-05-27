@@ -1,7 +1,7 @@
 //=============================================================================
 // rover-Autonomy Goal Sender
 // Sends instructions to the server
-// Last edited May 26, 2025
+// Last edited May 27, 2025
 // Version: 2.0
 //=============================================================================
 // Includes
@@ -39,7 +39,48 @@ public:
 
     void send_goal()
     {
+        // Wait for action server
+        auto_client_->wait_for_action_server();
 
+        // Create a goal
+        auto goal = AutoCommand::Goal();
+
+        // Mission Type
+        std::cout << "Mission Type:" << std::endl;
+        std::cin >> goal.mission_type; 
+        std::cout << std::endl; 
+
+        //The target latitude co-ordinate.
+        //8 decimal places
+        std::cout << "Target Latitude:" << std::endl;
+        std::cin >> goal.gps_lat_target; 
+        std::cout << std::endl; 
+
+        //The target longitude co-ordinate.
+        //8 decimal places
+        std::cout << "Target Longitude:" << std::endl;
+        std::cin >> goal.gps_long_target; 
+        std::cout << std::endl; 
+
+        //Target radius to search, for area searching;
+        std::cout << "Target Radius:" << std::endl;
+        std::cin >> goal.target_radius;
+        std::cout << std::endl;
+
+        goal.period = 0.8;
+
+        // Add callbacks
+        auto options = rclcpp_action::Client<AutoCommand>::SendGoalOptions();
+        options.feedback_callback =
+            std::bind(&AutoCommandClientNode::feedback_callback, this, _1, _2);
+        options.result_callback = 
+            std::bind(&AutoCommandClientNode::goal_result_callback, this, _1);
+
+        // Send Goal
+        RCLCPP_INFO(this->get_logger(), "Sending a goal");
+        auto_client_->async_send_goal(goal, options);
+        return;
+    
     }
 
     void feedback_callback(
@@ -68,7 +109,16 @@ private:
         else if (status == rclcpp_action::ResultCode::ABORTED)
             RCLCPP_INFO(this->get_logger(), "Goal was aborted");
         
-        // result.result.
+        int end = result.result->final_result;
+        if (end == 0)
+        {
+            RCLCPP_INFO(this->get_logger(), "Goal ended with result '0', stopping client");
+        }
+        else if (end == 1)
+        {
+            RCLCPP_INFO(this->get_logger(), "Goal ended with result '1', restaring client");
+            this->send_goal();
+        }
         
     }
 

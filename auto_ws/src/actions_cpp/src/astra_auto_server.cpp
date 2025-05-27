@@ -1,7 +1,7 @@
 //=============================================================================
 //rover-Autonomy Server
 //runs commands from the client
-//Last edited May 20, 2025
+//Last edited May 27, 2025
 //Version: 2.0
 //=============================================================================
 //INCLUDES
@@ -15,6 +15,7 @@
 #include <unistd.h>                         // usleep 
 #include <stdio.h>
 #include <algorithm>                        // Min
+#include <cmath>                            // sin, cos, tan2
 
 //Made by Daegan Brown for ASTRA
 #include "pathfind.h"                       // My functions
@@ -39,7 +40,13 @@
 #include "ros2_interfaces_pkg/msg/core_feedback.hpp"
 #include "ros2_interfaces_pkg/msg/core_control.hpp"
 #include "ros2_interfaces_pkg/msg/auto_feedback.hpp"
+#include "ros2_interfaces_pkg/msg/auto_nav.hpp" 
 
+//============
+// Definitions
+//============
+
+#define SECOND 1000000
 //=============================================================================
 // Predeclarations
 //=============================================================================
@@ -63,8 +70,12 @@ double current_long;
 int sats;
 
 
-// Checks
-bool coreWait = 1;
+// Flags
+bool canceled = 0;
+bool coreWait = 1;                  // Is it waiting on /core/feedback?
+bool arucoFound = 0;
+bool objectFound = 0;
+bool navFail = 0;
 
 
 
@@ -83,6 +94,7 @@ public:
     {
         subscriber_core_ = this->create_subscription<ros2_interfaces_pkg::msg::CoreFeedback>(
             "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::topic_callback, this, _1));
+        
 
     }
 private:
@@ -140,17 +152,13 @@ public:
         publisher_core = this->create_publisher<ros2_interfaces_pkg::msg::CoreControl>(
             "/core/control", 10);
 
-        //Creating Publisher that communicates to the motors
-        publisher_motors = this->create_publisher<std_msgs::msg::String>(
-            "astra/core/control", 10);
-        
-        //Creating a publisher that asks for imu data
-        publisher_feedback = this->create_publisher<std_msgs::msg::String>(
-            "astra/auto/feedback", 10);
-
         // Publisher to send information directly to anchor
         publisher_anchor = this->create_publisher<std_msgs::msg::String>(
             "/anchor/relay", 10);
+        
+        // Publisher to contact Nav2
+        publisher_nav = this->create_publisher<ros2_interfaces_pkg::msg::AutoNav>(
+            "/auto/nav", 10);
         
     }
     
@@ -164,6 +172,9 @@ private:
     double target_long;
     double target_radius;
     double period;
+
+    // Derived info 
+    float target_bearing;
 
     //=========================================================================
     // Callback of recieved Goal
@@ -223,7 +234,6 @@ private:
         const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
     {
         // Set microsecond values for usleep command
-        unsigned int u_second = 1000000;
         auto result = std::make_shared<NavigateRover::Result>();
 
         // Get action goal data
@@ -253,17 +263,17 @@ private:
             //-----------------------------------------------------------------
             case 0: 
                 {
-                    usleep(4 * u_second);
+                    usleep(4 * SECOND);
                     set_led(2);
-                    usleep(4 * u_second);
+                    usleep(4 * SECOND);
                     set_led(3);
-                    usleep(4 * u_second);
+                    usleep(4 * SECOND);
                     set_led(1);
                     // Face target
                     float target_bearing = (float)find_facing(target_lat, target_long,
                         current_lat, current_long);
                     orient(target_bearing);
-                        result->final_result = 0;
+                        result->final_result = 1;
                 }
                 break;
             //-----------------------------------------------------------------
@@ -272,7 +282,11 @@ private:
             // repeat until within target radius or goal is canceled.
             //-----------------------------------------------------------------
             case 1:
-                while (!(checkTarget()) && !(goal_handle->is_canceling()))
+                while (!(checkTarget()) && !(goal_handle->is_canceling()) && !(navFail))
+                {
+
+                }
+                if (navFail)
                 {
 
                 }
@@ -292,9 +306,9 @@ private:
         for (int i = 0; i < 5; i++)
         {
             set_led(2);
-            usleep(0.5 * u_second);
+            usleep(0.5 * SECOND);
             set_led(0);
-            usleep(0.5 * u_second);
+            usleep(0.5 * SECOND);
         }
         set_led(2);
 
@@ -1309,34 +1323,51 @@ private:
     
     void orient(float bearing)
     {
+        // Create and populate message and 
         auto message = ros2_interfaces_pkg::msg::CoreControl();
         message.turn_to_enable = false;
         message.turn_to = bearing;
         message.turn_to_timeout = 10;
         std::string msg = "Turning to face " + std::to_string(bearing); 
         const char * c_msg = msg.c_str();
-        publish_info(c_msg);
+        
+        
+        do {
+            publish_debug(c_msg);
 
-        publisher_core->publish(message);
+            publisher_core->publish(message);
+            for (int i = 0; i < 11; i++)
+            {
+                confirm_core();
+                if (abs(current_heading - bearing) <= 1)
+                    break;
+                usleep(SECOND);
+            }
+        } while (abs(current_heading - bearing) <= 1);
+            
         
     }
 
     //=========================================================================
     // Head to Point
+    // Orients, then goes towards point relative to distance left.
     //=========================================================================
 
     void head_to_point()
     {
-
+        confirm_core();
     }
 
     //=========================================================================
-    // Legacy AruCo Code
+    // Confirm Core data (gps, bearing)
     //=========================================================================
 
-    void legacy_aruco()
+    void confirm_core()
     {
-
+        publish_debug("Waiting for /core/feedback");
+        coreWait = 1;
+        while (coreWait);
+        publish_debug("Recieved /core/feedback");
     }
 
     //=========================================================================
@@ -1402,6 +1433,15 @@ private:
     }
 
     //=========================================================================
+    // Set Target Bearing
+    //=========================================================================
+    
+    void set_bearing()
+    {
+
+    }
+
+    //=========================================================================
     // Publish Debug, Info, Warn, Error, Fatal
     //=========================================================================
     
@@ -1432,6 +1472,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_anchor;
     //rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscription_;
     rclcpp::Publisher<ros2_interfaces_pkg::msg::CoreControl>::SharedPtr publisher_core;
+    rclcpp::Publisher<ros2_interfaces_pkg::msg::AutoNav>::SharedPtr publisher_nav;
     size_t count_;
     rclcpp_action::Server<NavigateRover>::SharedPtr navigate_rover_server_;
     rclcpp::CallbackGroup::SharedPtr cb_group_;
