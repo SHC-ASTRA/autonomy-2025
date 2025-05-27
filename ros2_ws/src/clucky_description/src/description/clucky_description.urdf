@@ -1,0 +1,15 @@
+<?xml version="1.0">
+<robot name="sam_bot" xmlns:xacro="https://ros.org/wiki/xacro">
+    <!--Define Robot Constants-->
+    <xacro:property name="base_width" valie="0.75"/>
+    <xacro:property name="base_length" valie="1.5"/>
+    <xacro:property name="base_height" valie="0.2"/>
+
+    <xacro:property name="wheel_radiue" valie="0.1"/>
+    <xacro:property name="wheel_width" valie="0.04"/>
+    <xacro:property name="wheel_ygap" valie="0.025"/>
+    <xacro:property name="wheel_zoff" valie="0.05"/>
+    <xacro:property name="wheel_xoff" valie="0.12"/>
+
+    
+</robot>

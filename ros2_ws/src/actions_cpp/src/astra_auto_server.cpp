@@ -34,10 +34,11 @@
 #include <opencv2/objdetect/aruco_detector.hpp> //
 #include <opencv2/calib3d.hpp>                  //
 
-
-//Other packages to include
-#include "astra_auto_interfaces/action/navigate_rover.hpp"  //contains action files and srv files
-
+// ROS2 Comms
+#include "ros2_interfaces_pkg/action/auto_command.hpp"
+#include "ros2_interfaces_pkg/msg/core_feedback.hpp"
+#include "ros2_interfaces_pkg/msg/core_control.hpp"
+#include "ros2_interfaces_pkg/msg/auto_feedback.hpp"
 
 //=============================================================================
 // Predeclarations
@@ -45,7 +46,7 @@
 
 
 //Shorthands and other such things
-using NavigateRover = astra_auto_interfaces::action::NavigateRover;
+using NavigateRover = ros2_interfaces_pkg::action::AutoCommand;
 using NavigateRoverGoalHandle = rclcpp_action::ServerGoalHandle<NavigateRover>;
 using namespace std::placeholders;
 
@@ -54,6 +55,17 @@ using namespace std::placeholders;
 double imu_bearing;                    
 std::string gps_string;
 bool cancel_request = false;
+
+// Feedback
+double current_heading;
+double current_lat;
+double current_long;
+int sats;
+
+
+// Checks
+bool coreWait = 1;
+
 
 
 
@@ -69,50 +81,33 @@ public:
     
     NavigateRoverSubscriberNode() : Node("navigate_rover_subscriber")
     {
-      navigate_rover_subscriber_ = this->create_subscription<std_msgs::msg::String>(
-      "astra/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::topic_callback, this, _1));
-
-      obj_detect_subscriber_ = this->create_subscription<std_msgs::msg::String>(
-      "astra/auto/obj", 10, std::bind(&NavigateRoverSubscriberNode::topic_callback, this, _1));
+        subscriber_core_ = this->create_subscription<ros2_interfaces_pkg::msg::CoreFeedback>(
+            "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::topic_callback, this, _1));
 
     }
-
 private:
-    void topic_callback(const std_msgs::msg::String & msg) 
+    //=========================================================================
+    // Subscriber Topic Callback
+    //=========================================================================
+    void topic_callback(const ros2_interfaces_pkg::msg::CoreFeedback & msg) 
     {
-        std::string command;
-        command = msg.data;
-        RCLCPP_INFO(this->get_logger(), "Recieved: '%s'", msg.data.c_str());
-        
-
-        
-        std::string delimiter = ",";
-            size_t pos = 0;
-            std::string token;
-            std::string scommand = command.c_str();
-            pos = scommand.find(delimiter);
-            token = scommand.substr(0, pos);
-            
-
-        if (token == "orientation")
+        if (coreWait)
         {
-            RCLCPP_INFO(this->get_logger(), "Recieved IMU bearing");
-
-            //Turns command into the proper bearing
-            
-            imu_bearing = orientation_string(scommand); 
+            RCLCPP_INFO(this->get_logger(), "Recieved Core Feedback!");
+            coreWait = 0;
         }
-        else if (token == "gps")
-        {
-            RCLCPP_INFO(this->get_logger(), "Recieved GPS location");
-            //Turns command into GPS string
-            gps_string = command;
-        }
+        current_heading = msg.orientation;
+        current_lat = msg.gps_lat;
+        current_long = msg.gps_long;
+        sats = msg.gps_sats;
 
+        RCLCPP_DEBUG(this->get_logger(), "Recieved Orientation: '%f' ", current_heading);
+        RCLCPP_DEBUG(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
+        RCLCPP_DEBUG(this->get_logger(), "Recieved Longitude: '%f' ", current_long);
+        RCLCPP_DEBUG(this->get_logger(), "With '%d' satellites", sats);
     }
 
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr navigate_rover_subscriber_;
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr obj_detect_subscriber_;
+    rclcpp::Subscription<ros2_interfaces_pkg::msg::CoreFeedback>::SharedPtr subscriber_core_;
 
 };
 
@@ -123,6 +118,9 @@ private:
 class NavigateRoverServerNode : public rclcpp::Node 
 {
 public:
+    //=========================================================================
+    // Constructor
+    //=========================================================================
     NavigateRoverServerNode() : Node("navigate_rover_server"), count_(0) 
     {
         cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
@@ -138,6 +136,10 @@ public:
             );
         RCLCPP_INFO(this->get_logger(), "Action server has been started");
         
+        // Publisher for Core Control
+        publisher_core = this->create_publisher<ros2_interfaces_pkg::msg::CoreControl>(
+            "/core/control", 10);
+
         //Creating Publisher that communicates to the motors
         publisher_motors = this->create_publisher<std_msgs::msg::String>(
             "astra/core/control", 10);
@@ -145,11 +147,27 @@ public:
         //Creating a publisher that asks for imu data
         publisher_feedback = this->create_publisher<std_msgs::msg::String>(
             "astra/auto/feedback", 10);
+
+        // Publisher to send information directly to anchor
+        publisher_anchor = this->create_publisher<std_msgs::msg::String>(
+            "/anchor/relay", 10);
         
     }
     
 private:
+    //=========================================================================
+    // Internal Variables
+    //=========================================================================
+    // Mission Info
+    int mission_type;
+    double target_lat;
+    double target_long;
+    double target_radius;
+    double period;
 
+    //=========================================================================
+    // Callback of recieved Goal
+    //=========================================================================
     rclcpp_action::GoalResponse goal_callback(
         const rclcpp_action::GoalUUID &uuid, std::shared_ptr<const NavigateRover::Goal> goal)
     {
@@ -157,16 +175,22 @@ private:
         (void)uuid;
         
         RCLCPP_INFO(this->get_logger(), "Recieved Goal");
-        if (goal->navigate_type > 15 || goal->navigate_type < 0)
+        // Invalid mission types
+        if (goal->mission_type > 15 || goal->mission_type < 0)
         {
             return rclcpp_action::GoalResponse::REJECT;
         }
+        // Acceptable, then proceed
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
-
+    //=========================================================================
+    // Cancelling the Goal
+    //=========================================================================
     rclcpp_action::CancelResponse cancel_callback(
         const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
     {
+        // Get rid of stdr output at build
+        (void)goal_handle;
         std::string rover_command;
         auto message_motors = std_msgs::msg::String();
 
@@ -182,16 +206,104 @@ private:
         
         return rclcpp_action::CancelResponse::ACCEPT;
     }
-
+    //=========================================================================
+    // Once Accepted
+    //=========================================================================
     void handle_accepted_callback(
         const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
     {
         
         RCLCPP_INFO(this->get_logger(), "Executing the goal");
-        execute_goal(goal_handle);
+        legacy_execute_goal(goal_handle);
+    }
+    //=========================================================================
+    // Execution of the Goal
+    //=========================================================================
+    void execute_goal(
+        const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
+    {
+        // Set microsecond values for usleep command
+        unsigned int u_second = 1000000;
+        auto result = std::make_shared<NavigateRover::Result>();
+
+        // Get action goal data
+        mission_type = goal_handle->get_goal()->mission_type;
+        target_lat = goal_handle->get_goal()->gps_lat_target;
+        target_long = goal_handle->get_goal()->gps_long_target;
+        target_radius = goal_handle->get_goal()->target_radius;
+        period = goal_handle->get_goal()->period;
+
+        publish_info("Recieved New Goal");
+        set_led(1);                         // Red
+
+        // Check status
+        if (goal_handle->is_canceling())
+        {
+            publish_info("Goal was canceled!");
+            publish_debug("Cancel happened right before switch in execute_goal().");
+            set_led(0);
+
+        }
+
+        switch (mission_type) {
+            //-----------------------------------------------------------------
+            // Case 0: 
+            // Rover will wait 4 seconds, change LED to green, wait 4 seconds, 
+            // to blue, then to red, then turn to bearing target, then stop.
+            //-----------------------------------------------------------------
+            case 0: 
+                {
+                    usleep(4 * u_second);
+                    set_led(2);
+                    usleep(4 * u_second);
+                    set_led(3);
+                    usleep(4 * u_second);
+                    set_led(1);
+                    // Face target
+                    float target_bearing = (float)find_facing(target_lat, target_long,
+                        current_lat, current_long);
+                    orient(target_bearing);
+                        result->final_result = 0;
+                }
+                break;
+            //-----------------------------------------------------------------
+            // Case 1:
+            // Rover will point to target, drive forward 3 seconds, then 
+            // repeat until within target radius or goal is canceled.
+            //-----------------------------------------------------------------
+            case 1:
+                while (!(checkTarget()) && !(goal_handle->is_canceling()))
+                {
+
+                }
+                break;
+        }
+        if (goal_handle->is_canceling())
+        {
+            publish_info("Goal was canceled!");
+            publish_debug("Cancel happened during switch.");
+            set_led(0);
+        }
+
+
+        // Send Result
+
+        // Set LED to blink green
+        for (int i = 0; i < 5; i++)
+        {
+            set_led(2);
+            usleep(0.5 * u_second);
+            set_led(0);
+            usleep(0.5 * u_second);
+        }
+        set_led(2);
+
     }
 
-    void execute_goal(
+    //=========================================================================
+    // Legacy Execution of Goal
+    //=========================================================================
+    void legacy_execute_goal(
         const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
     {
         // Set microsecond values for usleep command
@@ -200,7 +312,7 @@ private:
         auto result = std::make_shared<NavigateRover::Result>();
 
         // Get Request from goal
-        int command_1 = goal_handle->get_goal()->navigate_type;
+        int command_1 = goal_handle->get_goal()->mission_type;
         double command_2 = goal_handle->get_goal()->gps_lat_target;
         double command_3 = goal_handle->get_goal()->gps_long_target;
         double command_4 = goal_handle->get_goal()->target_radius;
@@ -209,7 +321,7 @@ private:
         int navigate_type = command_1;
         double gps_lat_target = command_2;
         double gps_long_target = command_3;
-        double target_radius = command_4;
+        double target_radius = command_4; (void)target_radius;
         double period = command_5;
 
         // Execute the action
@@ -756,21 +868,21 @@ private:
 
             int x_coord = command_2;
             int x2_coord = command_3;
-            int x3_coord = 0;
-            int x4_coord = 0;
-            int y_coord = 0;
-            int y2_coord = 0;
-            int y3_coord = 0;
+            int x3_coord = 0; (void)x3_coord;
+            int x4_coord = 0; (void)x4_coord;
+            int y_coord = 0; 
+            int y2_coord = 0; (void)y2_coord;
+            int y3_coord = 0; (void)y3_coord;
             int y4_coord = 0;
-            int pog_checker = 0;
+            int pog_checker = 0; (void)pog_checker;
             int midpoint = 0;
-            float pixelHeight;
-            float actualHeight;
+            float pixelHeight; (void)pixelHeight;
+            float actualHeight; (void)actualHeight;
             float pixelWidth ;
             float actualWidth;
             float distanceFromW = command_4;
             float range;
-            float lastRange;
+            float lastRange; (void)lastRange;
             double x_offset, y_offset;
             double lat_offset, long_offset;
             //CHANGE PER CAMERA
@@ -783,7 +895,7 @@ private:
 
 
             double deg2rad = (3.141592/180);
-            double rad2deg = (180/3.141592);
+            double rad2deg = (180/3.141592); (void)rad2deg;
 
             std::cout << "Homing in on Aruco" << std::endl;
             // int cameraNum = 10;
@@ -1111,7 +1223,9 @@ private:
 
     //Subscriber to astra/core/feedback
     
-    
+    //=========================================================================
+    // DEBUG This shouldn't be here...
+    //=========================================================================
     void topic_callback(const std_msgs::msg::String & msg) 
     {
         std::string command;
@@ -1144,17 +1258,188 @@ private:
 
     }
 
+    //=========================================================================
+    // Set motors
+    //=========================================================================
+
+    void set_motors(int state)
+    {
+        auto message = ros2_interfaces_pkg::msg::CoreControl();
+
+        // Stop
+        if (state == 0)
+        {
+            publish_info("Stopping motors!");
+            message.left_stick = 0;
+            message.right_stick = 0;
+            publisher_core->publish(message);
+        }
+        // Go Forwards
+        else if (state == 1)
+        {
+            publish_info("Going Forward!");
+            message.left_stick = .7;
+            message.right_stick = .7;
+            publisher_core->publish(message);
+        }
+        // Go Backwards
+        else if (state == 2)
+        {
+            publish_info("Going Backwards!");
+            message.left_stick = -0.7;
+            message.right_stick = -0.7;
+            publisher_core->publish(message);
+        }
+        // Warn, stop! Invalid input
+        else 
+        {
+            publish_warn("Invalid motor state!");
+            message.left_stick = 0;
+            message.right_stick = 0;
+            publisher_core->publish(message);
+            publish_warn("Stopped motors, future behaviour may be undefined!");
+        }
+
+
+    }
+
+    //=========================================================================
+    // Orient To
+    //=========================================================================
+    
+    void orient(float bearing)
+    {
+        auto message = ros2_interfaces_pkg::msg::CoreControl();
+        message.turn_to_enable = false;
+        message.turn_to = bearing;
+        message.turn_to_timeout = 10;
+        std::string msg = "Turning to face " + std::to_string(bearing); 
+        const char * c_msg = msg.c_str();
+        publish_info(c_msg);
+
+        publisher_core->publish(message);
+        
+    }
+
+    //=========================================================================
+    // Head to Point
+    //=========================================================================
+
+    void head_to_point()
+    {
+
+    }
+
+    //=========================================================================
+    // Legacy AruCo Code
+    //=========================================================================
+
+    void legacy_aruco()
+    {
+
+    }
+
+    //=========================================================================
+    // Legacy Search
+    //=========================================================================
+
+    void legacy_search()
+    {
+
+    }
+    
+    //=========================================================================
+    // Set LED
+    //=========================================================================
+    // 0 = OFF
+    // 1 = RED
+    // 2 = GREEN
+    // 3 = BLUE
+    void set_led(int color)
+    {
+        auto command = std_msgs::msg::String();
+
+        switch (color) {
+            case 0:
+                publish_info("Turning off LED");
+                command.data = "led_set,0,0,0";
+                break;
+            case 1:
+                publish_info("Turning LED red");
+                command.data = "led_set,255,0,0";
+                break;
+            case 2:
+                publish_info("Turning LED Green");
+                command.data = "led_set,0,255,0";
+                break;
+            case 3:
+                publish_info("Turning LED Blue");
+                command.data = "led_set,0,0,255";
+                break;
+            default:
+                publish_info("Turning off LED");
+                publish_warn("Recieved unknown LED command. Turning off LED and proceeding");
+                command.data = "led_set,0,0,0";
+                break;
+
+        }
+        publisher_anchor->publish(command);
+    }
+
+    bool checkTarget()
+    {
+        coreWait = 1;
+        publish_debug("Waiting for core feedback before checking target");
+        while (coreWait);
+        if ((abs(current_lat - target_lat) <= 0.000018) && \
+            ((abs(current_long - target_long) <= 0.000018)))
+        {
+            publish_info("Within Target Bounds!");
+            return true;
+        }
+        else
+            return false;
+    }
+
+    //=========================================================================
+    // Publish Debug, Info, Warn, Error, Fatal
+    //=========================================================================
+    
+    void publish_debug(const char * msg)
+    {
+        RCLCPP_DEBUG(this->get_logger(), msg);
+    }
+    void publish_info(const char * msg)
+    {
+        RCLCPP_INFO(this->get_logger(), msg);
+    }
+    void publish_warn(const char * msg)
+    {
+        RCLCPP_WARN(this->get_logger(), msg);
+    }
+    void publish_error(const char * msg)
+    {
+        RCLCPP_ERROR(this->get_logger(), msg);
+    }
+    void publish_fatal(const char * msg)
+    {
+        RCLCPP_FATAL(this->get_logger(), msg);
+    }
+
+
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_motors;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_feedback;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_anchor;
     //rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscription_;
+    rclcpp::Publisher<ros2_interfaces_pkg::msg::CoreControl>::SharedPtr publisher_core;
     size_t count_;
     rclcpp_action::Server<NavigateRover>::SharedPtr navigate_rover_server_;
     rclcpp::CallbackGroup::SharedPtr cb_group_;
 };
 
-//*************************************************************************************************
+//====================================================================================
 // Main
-//*************************************************************************************************
+//====================================================================================
 int main(int argc, char **argv)
 {
     //Generates AruCo tags

@@ -9,16 +9,19 @@
 #include <iostream>
 #include <chrono>
 
+// ROS 2 Comms
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
-#include "astra_auto_interfaces/action/navigate_rover.hpp"
-
+// #include "astra_auto_interfaces/action/navigate_rover.hpp"
+#include "ros2_interfaces_pkg/action/auto_command.hpp"
+#include "ros2_interfaces_pkg/msg/core_feedback.hpp"
+#include "ros2_interfaces_pkg/msg/auto_feedback.hpp"
 
 //=============================================================================
 // Namespaces
 //=============================================================================
 
-using NavigateRover = astra_auto_interfaces::action::NavigateRover;
+using NavigateRover = ros2_interfaces_pkg::action::AutoCommand;
 using NavigateRoverGoalHandle = rclcpp_action::ClientGoalHandle<NavigateRover>;
 using namespace std::placeholders;
 
@@ -43,7 +46,7 @@ public:
 
         // Create a goal
         auto goal = NavigateRover::Goal();
-        goal.navigate_type = navigate_type;
+        goal.mission_type = navigate_type;
         goal.gps_lat_target = gps_lat_target;
         goal.gps_long_target = gps_long_target;
         goal.target_radius = target_radius;
@@ -114,7 +117,7 @@ int main(int argc, char **argv)
 
     //Which type of navigation. See astra_auto_server.cpp for a list of
     //options. 
-    std::cout << "Input Type:" << std::endl;
+    std::cout << "Mission Type:" << std::endl;
     std::cin >> navigate_type; 
     std::cout << std::endl; 
 
