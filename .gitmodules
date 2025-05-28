@@ -1,0 +1,4 @@
+[submodule "auto_ws/src/ros2_interfaces_pkg"]
+	path = auto_ws/src/ros2_interfaces_pkg
+	url = git@github.com:SHC-ASTRA/ros2_interfaces_pkg.git
+	branch = auto
