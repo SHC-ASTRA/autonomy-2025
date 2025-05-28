@@ -48,7 +48,7 @@
 //=============================
 
 #define SECOND 1000000
-#define FOCAL_RATIO 475.488
+#define FOCAL_RATIO 700.000
 //=============================================================================
 // Predeclarations
 //=============================================================================
@@ -181,8 +181,6 @@ private:
             RCLCPP_INFO(this->get_logger(), "AruCo Tag number '%d' detected", msg.object_id);
             arucoFound = 1;
         }
-        // Hold until cleared by server
-        holdMacula = 1;
         
         // Save data
         // detected = msg.detected;
@@ -195,6 +193,9 @@ private:
         y1_c = msg.y1;
         y2_c = msg.y2;
         y3_c = msg.y3;
+
+        // Hold until cleared by server
+        holdMacula = 1;
     }
 
 
@@ -283,8 +284,9 @@ private:
         
         RCLCPP_INFO(this->get_logger(), "Recieved Goal");
         // Invalid mission types
-        if (goal->mission_type > 15 || goal->mission_type < 0)
-        {
+        if (goal->mission_type > 15 || goal->mission_type < -2)
+        {   
+            publish_info("Rejected Goal! Out of bounds!");
             return rclcpp_action::GoalResponse::REJECT;
         }
         // Acceptable, then proceed
@@ -416,6 +418,7 @@ private:
             //-----------------------------------------------------------------
             case -2:
                 publish_debug("Started mission -2");
+                while (!holdMacula);
                 calibrate_camera();
                 t_result = 0;
                 break;
@@ -785,7 +788,7 @@ private:
     // Finds range of AruCo detected 
     void range_aruco()
     {
-        publish_debug("Starting Function: range_aruco()");
+        publish_info("Starting Function: range_aruco()");
 
         int midpoint, pog_checker;
         float pixelHeight, actualHeight, pixelWidth, actualWidth, distanceFromW = 0,
@@ -801,7 +804,7 @@ private:
         double deg2rad = (3.141592/180);
         double rad2deg = (180/3.141592);
         
-        refresh();
+        // refresh();
         midpoint = (abs(x0_c - x1_c));
         need_heading = current_heading + ((320 - midpoint) * -0.046875);
 
@@ -858,7 +861,7 @@ private:
     // Using target_radius as range, this is used to find focal ratio
     void calibrate_camera()
     {
-        publish_debug("Starting Function: calibrate_camera()");
+        publish_info("Starting Function: calibrate_camera()");
 
         int midpoint, pog_checker;
         float pixelHeight, actualHeight, pixelWidth, actualWidth, distanceFromW = 0,
@@ -874,7 +877,7 @@ private:
         double deg2rad = (3.141592/180);
         double rad2deg = (180/3.141592);
         
-        refresh();
+        // refresh();
         midpoint = (abs(x0_c - x1_c));
         need_heading = current_heading + ((320 - midpoint) * -0.046875);
 

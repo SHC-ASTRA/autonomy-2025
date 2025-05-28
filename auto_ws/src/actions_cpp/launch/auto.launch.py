@@ -15,10 +15,10 @@ def generate_launch_description():
             name='auto_client',
             output='screen',
             parameters=[
-                {'mission_type': 0},
+                {'mission_type': -1},
                 {'lat': 0.00},
                 {'long': 0.00},
-                {'radius': 0},
+                {'radius': 1.00},
                 {'period': 0.8},
             ]
         ),

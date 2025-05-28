@@ -44,10 +44,10 @@ public:
         // target radius: Target radius 
         // period: Rate of updating
         //---------------------------------------------------------------------
-        this->declare_parameter("mission_type",0);
+        this->declare_parameter("mission_type",-2);
         this->declare_parameter("lat",0.00);
         this->declare_parameter("long",0.00);
-        this->declare_parameter("radius",0);
+        this->declare_parameter("radius",1.0);
         this->declare_parameter("period",0.8);
 
     }

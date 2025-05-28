@@ -56,7 +56,7 @@ class MaculaNode(Node):
         self.detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.parameters)
 
         # Load YOLOv8 model
-        self.model = YOLO("./src/auto_pkg/models/best.pt") 
+        self.model = YOLO("./src/macula_pkg/models/best.pt") 
         
         # Get object detection threshold from parameter
         self.declare_parameter("confidence_threshold", 0.5)
