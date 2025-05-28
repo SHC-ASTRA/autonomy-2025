@@ -18,11 +18,10 @@
   
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
+  <depend>ros2_interfaces_pkg</depend>
   <depend>rclcpp_action</depend>
-  <depend>astra_auto_interfaces</depend>
   <depend>image_transport</depend>
   <depend>realsense2_camera</depend>
-  <depend>ros2_interfaces_pkg</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

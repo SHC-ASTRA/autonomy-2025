@@ -12,7 +12,7 @@
         "/usr/include/**",
         "/usr/include/c++/**",
         "/usr/local/include/**",
-        "/usr/local/includ/opencv**"
+        "/usr/local/include/opencv**"
 
       ],
       "name": "ROS",

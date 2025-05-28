@@ -35,19 +35,20 @@
 #include <opencv2/objdetect/aruco_detector.hpp> //
 #include <opencv2/calib3d.hpp>                  //
 
-// ROS2 Comms
+// ROS2 Interfaces
 #include "ros2_interfaces_pkg/action/auto_command.hpp"
 #include "ros2_interfaces_pkg/msg/core_feedback.hpp"
 #include "ros2_interfaces_pkg/msg/core_control.hpp"
 #include "ros2_interfaces_pkg/msg/auto_feedback.hpp"
 #include "ros2_interfaces_pkg/msg/auto_nav.hpp" 
-// #include "ros2_interfaces_pkg/msg/"
+#include "ros2_interfaces_pkg/msg/macula_feedback.hpp"
 
-//============
+//=============================
 // Definitions
-//============
+//=============================
 
 #define SECOND 1000000
+#define FOCAL_RATIO 475.488
 //=============================================================================
 // Predeclarations
 //=============================================================================
@@ -70,14 +71,25 @@ double current_lat;
 double current_long;
 int sats;
 
+// Macula
+double macula_heading;
+double macula_lat;
+double macula_long;
+double macula_range;
+int object_id;
+float x0_c, x1_c, x2_c, x3_c, y0_c, y1_c, y2_c, y3_c;
+
+
 
 // Flags
 bool canceled = 0;
 bool coreWait = 1;                  // Is it waiting on /core/feedback?
 bool anchorWait = 0;                // Is it waiting on /anchor/core/feedback?
 bool arucoFound = 0;
-bool objectFound = 0;
-bool navFail = 0;
+bool hammerFound = 0;
+bool bottleFound = 0;
+bool navFail = 1;
+bool holdMacula = 0;
 
 
 
@@ -98,7 +110,9 @@ public:
             "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::core_callback, this, _1));
         subscriber_anchor_ = this->create_subscription<std_msgs::msg::String>(
             "/anchor/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::anchor_callback, this, _1));
-        subscriber_macula_ = this->create_subscription<ros2_interfaces_pkg::msg::Macula
+        subscriber_macula_ = this->create_subscription<ros2_interfaces_pkg::msg::MaculaFeedback>(
+            "/auto/macula", 10, std::bind(&NavigateRoverSubscriberNode::macula_callback, this, _1));
+        
         
         
 
@@ -127,14 +141,72 @@ private:
 
     void anchor_callback(const std_msgs::msg::String & msg)
     {
-        if (anchorWait == 0)
+        if (anchorWait == 0 || holdMacula)
             return;
-        if (msg.data == "")
+        if (msg.data == "can_relay_fromvic,core,drivemeters_done")
         {
             anchorWait = 0;
         }
     }
+
+    void macula_callback(const ros2_interfaces_pkg::msg::MaculaFeedback & msg)
+    {
+        if (!msg.detected || holdMacula == 1)
+        {
+            if (holdMacula == 0)
+            {
+                hammerFound = 0;
+                bottleFound = 0;
+                arucoFound = 0;
+            }
+            return;
+        }    
+        RCLCPP_INFO(this->get_logger(), "Spotted target in frame");
+
+
+        // Detect What
+        if (msg.object_id == 51)
+        {
+            RCLCPP_INFO(this->get_logger(), "Hammer Detected!");
+            hammerFound = 1;
+
+        }
+        else if (msg.object_id == 51)
+        {
+            RCLCPP_INFO(this->get_logger(), "Water Bottle Detected!");
+            bottleFound = 1;
+        }
+        else 
+        {
+            RCLCPP_INFO(this->get_logger(), "AruCo Tag number '%d' detected", msg.object_id);
+            arucoFound = 1;
+        }
+        // Hold until cleared by server
+        holdMacula = 1;
+        
+        // Save data
+        // detected = msg.detected;
+        object_id = msg.object_id;
+        x0_c = msg.x0;
+        x1_c = msg.x1;
+        x2_c = msg.x2;
+        x3_c = msg.x3;
+        y0_c = msg.y0;
+        y1_c = msg.y1;
+        y2_c = msg.y2;
+        y3_c = msg.y3;
+    }
+
+
+    //=======================================================================//
+    //= Internal Variables                                                  =//
+    //=======================================================================//
+    // bool detected;
+    // int object_id;
+    // float x0, x1, x2, x3, y0, y1, y2, y3;
+
     rclcpp::Subscription<ros2_interfaces_pkg::msg::CoreFeedback>::SharedPtr subscriber_core_;
+    rclcpp::Subscription<ros2_interfaces_pkg::msg::MaculaFeedback>::SharedPtr subscriber_macula_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscriber_anchor_;
 
 };
@@ -263,6 +335,7 @@ private:
         const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
     {
         // Create result variable
+        int t_result;
         auto result = std::make_shared<NavigateRover::Result>();
 
         // Set rate
@@ -279,7 +352,10 @@ private:
             set_led(0);
 
         }
-
+        //---------------------------------------------------------------------
+        // This switch statement is determined by the launch parameters.
+        // Negative mission types are debug types. 
+        //---------------------------------------------------------------------
         switch (mission_type) {
             //-----------------------------------------------------------------
             // Case 0: 
@@ -312,8 +388,36 @@ private:
                 }
                 if (navFail)
                 {
-
+                    legacy_nav();
                 }
+                break;
+
+            //-----------------------------------------------------------------
+            // Case -1: 
+            // Needs to run with Macula to test rangefinding. 
+            // Will publish found range 10 times, then exit with result.
+            //-----------------------------------------------------------------
+            case -1:
+                publish_debug("Started mission -1");
+                for (int i = 0; i < 11; i++)
+                {
+                    while (holdMacula = 0);
+                    range_aruco();
+                    RCLCPP_INFO(this->get_logger(), "Found Macula Range: '%f'", macula_range);
+                    RCLCPP_INFO(this->get_logger(), "Found Macula Lat: '%f'", macula_lat);
+                    RCLCPP_INFO(this->get_logger(), "Found Macula Long: '%f'", macula_long);
+                    RCLCPP_INFO(this->get_logger(), "Found Macula Heading: '%f'", macula_heading);
+                }
+                t_result = 0;
+                break;
+            //-----------------------------------------------------------------
+            // Case -2: 
+            // Runs case -1 in reverse, using target radius as the range. 
+            //-----------------------------------------------------------------
+            case -2:
+                publish_debug("Started mission -2");
+                calibrate_camera();
+                t_result = 0;
                 break;
         }
         if (goal_handle->is_canceling())
@@ -325,6 +429,9 @@ private:
 
 
         // Send Result
+        result->final_result = t_result;
+        goal_handle->succeed(result);
+        publish_info("Goal Succeeded!");
 
         // Set LED to blink green
         for (int i = 0; i < 5; i++)
@@ -337,472 +444,7 @@ private:
         set_led(2);
 
     }
-
-    //=========================================================================
-    // Legacy Execution of Goal
-    //=========================================================================
-    void legacy_execute_goal(
-        const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
-    {
-        // Set microsecond values for usleep command
-        // DEBUG change variable names
-        unsigned int microsecond = 1000000;
-        auto result = std::make_shared<NavigateRover::Result>();
-
-        // Get Request from goal
-        int command_1 = goal_handle->get_goal()->mission_type;
-        double command_2 = goal_handle->get_goal()->gps_lat_target;
-        double command_3 = goal_handle->get_goal()->gps_long_target;
-        double command_4 = goal_handle->get_goal()->target_radius;
-        double command_5 = goal_handle->get_goal()->period;
-
-        int navigate_type = command_1;
-        double gps_lat_target = command_2;
-        double gps_long_target = command_3;
-        double target_radius = command_4; (void)target_radius;
-        double period = command_5;
-
-        // Execute the action
-        int final_result = 0;
-        std::string rover_command;
-        rclcpp::Rate loop_rate(1.0/period);
-        
-        // Switch Statement determining what type of action is being asked of the 
-        // rover. 
-        // 0: Stops rover
-        // 1: Simply go to GPS coordinates, stop, and signal.
-        // 2: Go and search target area for aruco tags
-        // 3: Go and search target area for objects
-        // 4: 1 but only looping once
-        // 5: Goes forward. Used for testing. 
-        // 6: Search pattern
-        // 7: AruCo Test
-        // 8: Object Detection
-
-        // 10: ARUCO detected Message
-        // 11: Object detected Message
-        auto message_motors = std_msgs::msg::String();
-        auto message_feedback = std_msgs::msg::String();
-        
-        double current_lat;
-        double current_long;
-        //double bearing;
-        //float currentHeading;
-        //float needHeading = 0;
-        double needDistance;
-        int i_needDistance;
-        int i_needHeading;
-        int iterate = 0;
-
-
-        //FEEDBACK
-        message_feedback.data = "Autonomy starting up. Cycling lights.";
-        publisher_feedback->publish(message_feedback);
-
-
-        //Turn LEDs red 
-        message_motors.data = "led_set,300,0,0";
-        publisher_motors->publish(message_motors);
-
-
-        //Request GPS data from Core, then wait 3 seconds.
-        message_motors.data = "data,sendGPS";
-        publisher_motors->publish(message_motors);
-        usleep(3 * microsecond);
-
-        //Use first input to decide where to go. Switch statement could work
-        //better, TBD
-
-        //=====================================================================
-        // Core Goals
-        //=====================================================================
-        
-        //Check Cancel
-        if (goal_handle->is_canceling())
-        {
-            //FEEDBACK
-            message_feedback.data = "Ending goal";
-            publisher_feedback->publish(message_feedback);
-            result->final_result = 1;
-            goal_handle->canceled(result);
-            
-            return;
-        }
-
-        // Stop Goal
-        if (navigate_type == 0)
-        {
-            //FEEDBACK
-            message_feedback.data = "Selected STOP";
-            publisher_feedback->publish(message_feedback);
-
-            message_motors.data = "ctrl,0,0";
-            RCLCPP_INFO(this->get_logger(), "Stopping");
-            publisher_motors->publish(message_motors);
-        }
-
-        
-        // INTERNAL 1
-        if (navigate_type == 10)
-        {
-            //FEEDBACK
-            message_feedback.data = "Aruco Tag detected! Homing in";
-            publisher_feedback->publish(message_feedback);
-
-            int x_coord = command_2;
-            int x2_coord = command_3;
-            int x3_coord = 0; (void)x3_coord;
-            int x4_coord = 0; (void)x4_coord;
-            int y_coord = 0; 
-            int y2_coord = 0; (void)y2_coord;
-            int y3_coord = 0; (void)y3_coord;
-            int y4_coord = 0;
-            int pog_checker = 0; (void)pog_checker;
-            int midpoint = 0;
-            float pixelHeight; (void)pixelHeight;
-            float actualHeight; (void)actualHeight;
-            float pixelWidth ;
-            float actualWidth;
-            float distanceFromW = command_4;
-            float range;
-            float lastRange; (void)lastRange;
-            double x_offset, y_offset;
-            double lat_offset, long_offset;
-            //CHANGE PER CAMERA
-            //MAY NEED CALIBRATING
-            float focalRatio = 475.488;
-            float theta;
-            bool found = false;
-            bool firstFrame = false;
-
-
-
-            double deg2rad = (3.141592/180);
-            double rad2deg = (180/3.141592); (void)rad2deg;
-
-            std::cout << "Homing in on Aruco" << std::endl;
-            // int cameraNum = 10;
-            //std::cin >> cameraNum;
-            cv::VideoCapture inputVideo("/dev/video10");
-            cv::Mat camMatrix, distCoeffs;
-            
-            
-            //inputVideo.open(cameraNum);
-            cv::aruco::DetectorParameters detectorParams = cv::aruco::DetectorParameters();
-            cv::aruco::Dictionary dictionary = \
-                cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
-            cv::aruco::ArucoDetector detector(dictionary, detectorParams);
-            
-            cv::Mat image, imageCopy;
-            std::vector<int> ids;
-            std::vector<std::vector<cv::Point2f>> corners, rejected;
-            inputVideo >> image;
-            std::cout << "Video Prepared" << std::endl;
-
-            cv::Mat res;
-            std::vector<cv::Mat> spl;
-            cv::VideoWriter outputVideo;    
-            // select desired codec (must be available at runtime)
-            int codec = cv::VideoWriter::fourcc('H', '2', '6', '4');  
-            double fps = 25.0;                          // framerate of the created video stream
-            std::string filename = "./live.mp4";             // name of the output video file
-            outputVideo.open(filename, codec, fps, image.size(), true);
-            // check if we succeeded
-            if (!outputVideo.isOpened()) {
-                std::cerr << "Could not open the output video file for write\n";
-                
-                }
-
-
-
-                std::cout << "Output prepared" << std::endl;
-            int iterateIT = 0;
-            int estAttempts;
-            
-            
-            while (inputVideo.grab()) 
-            {
-                iterateIT ++;
-                // std::cout << "Attempt " << iterateIT << std::endl;
-                cv::Mat image, imageCopy;
-                inputVideo.retrieve(image);
-                
-                cv::resize(image, imageCopy, cv::Size(640, 480), 0, 0, cv::INTER_AREA);
-                //cv::namedWindow("out", CV_WINDOW_AUTOSIZE);
-                //std::vector<int> ids;
-                //std::vector<std::vector<cv::Point2f>> corners, rejected;
-                detector.detectMarkers(imageCopy, corners, ids, rejected);
-                // if at least one marker detected
-                // int debug_iterator = 0;
-                if (ids.size() > 0)
-                {
-                    /*
-                    int Xdebug_aruco = (int)rejected[0][0].x;
-                    int Ydebug_aruco = (int)rejected[0][0].y;
-                    std::cout << '{' << Xdebug_aruco << ',' << Ydebug_aruco << '}' << std::endl;
-                    int Xids = (int)ids[0];
-                    std::cout << Xids << std::endl;
-                    */
-                    //FEEDBACK
-                    message_feedback.data = "Aruco Tag detected! Homing in";
-                    publisher_feedback->publish(message_feedback);
-                    cv::aruco::drawDetectedMarkers(imageCopy, corners, ids);
-                    std::cout << "Aruco Detected" << std::endl;
-                    x_coord = (int)corners[0][0].x;
-                    y_coord = (int)corners[0][0].y;
-
-                    x2_coord = (int)corners[0][1].x;
-                    y2_coord = (int)corners[0][1].y;
-
-                    x3_coord = (int)corners[0][2].x;
-                    y3_coord = (int)corners[0][2].y;
-
-                    x4_coord = (int)corners[0][3].x;
-                    y4_coord = (int)corners[0][3].y;
-                    found = true;
-                    firstFrame = true;
-
-      
-                }
-                estAttempts = distanceFromW/2.5;
-                 
-                outputVideo.write(imageCopy);
-
-                message_motors.data = "data,getOrientation";
-                publisher_motors->publish(message_motors);
-                usleep(1 * microsecond);
-                // imu_bearing = orientation_string(command);
-
-                //*********************************************************************************
-                // Face Tag
-                //*********************************************************************************
-                if (found)
-                {
-                    midpoint = (abs(x_coord - x2_coord));
-                    i_needHeading = imu_bearing + ((320 - midpoint) * -0.046875);
-                    // if (abs(320 - midpoint) <= 5)
-                    // {
-                    //     //You chill
-                    //     //FEEDBACK
-                    //     message_feedback.data = "Perfect Heading";
-                    //     publisher_feedback->publish(message_feedback);
-                    // }
-                    // else if (abs(320-midpoint) <= 30)
-                    // {
-                    //     if (midpoint < 320)
-                    //         i_needHeading = imu_bearing - 3;
-                    //     else
-                    //         i_needHeading = imu_bearing + 3;
-
-                    //     if (imu_bearing < 0)
-                    //         imu_bearing = imu_bearing + 360;
-                    //     else if (imu_bearing > 360)
-                    //         imu_bearing = imu_bearing - 360;
-                    //     //FEEDBACK
-                    //     message_feedback.data = "Good Heading";
-                    //     publisher_feedback->publish(message_feedback);
-                    //     message_motors.data = "auto,turningTo,15000," + std::to_string(i_needHeading);
-                    //     publisher_motors->publish(message_motors);
-                    // }
-                    // else if (abs(320-midpoitn) <= 100)
-                    // {
-                    //     if (midpoint < 320)
-                    //         i_needHeading = imu_bearing - 5;
-                    //     else
-                    //         i_needHeading = imu_bearing + 5;
-
-                    //     if (imu_bearing < 0)
-                    //         imu_bearing = imu_bearing + 360;
-                    //     else if (imu_bearing > 360)
-                    //         imu_bearing = imu_bearing - 360;
-                        
-                    //     //FEEDBACK
-                    //     message_feedback.data = "Mediocre Heading";
-                    //     publisher_feedback->publish(message_feedback);
-                    // }
-                    // else if (abs(320-midpoint) <= 200)
-                    // {
-                    //     if (midpoint < 320)
-                    //         i_needHeading = imu_bearing - 10;
-                    //     else
-                    //         i_needHeading = imu_bearing + 10;
-
-                    //     if (imu_bearing < 0)
-                    //         imu_bearing = imu_bearing + 360;
-                    //     else if (imu_bearing > 360)
-                    //         imu_bearing = imu_bearing - 360;
-                    //     //FEEDBACK
-                    //     message_feedback.data = "Poor Heading";
-                    //     publisher_feedback->publish(message_feedback);
-                    // }
-
-
-                    message_motors.data = "data,getOrientation";
-                    publisher_motors->publish(message_motors);
-                    usleep(0.5 * microsecond);
-
-                    //*********************************************************************************
-                    // Calculate Distance
-                    //*********************************************************************************
-
-                    pixelHeight = y4_coord - y_coord;
-                    actualHeight = .15;
-                    pixelWidth = x2_coord - x_coord;
-                    actualWidth = .15;
-                    distanceFromW = (focalRatio/pixelWidth) * actualWidth;
-                    range = distanceFromW;
-                    //FEEDBACK
-                    message_feedback.data = range;
-                    publisher_feedback->publish(message_feedback);
-                    
-                    estAttempts = range/2.5;
-                    
-
-                    //FEEDBACK
-                    message_feedback.data = ("ARUCO detected at range of '%s' meters", message_feedback.data.c_str());
-                    publisher_feedback->publish(message_feedback);
-
-                    theta = imu_bearing;
-                    if (theta > 90 && theta < 180)
-                    {
-                        theta = 180 - theta;
-                    }
-                    else if (theta > 180 && theta < 270)
-                    {
-                        theta = theta - 180;
-                    }
-                    else if (theta > 270 && theta < 360)
-                    {
-                        theta = 360 - theta;
-                    }
-
-                    x_offset = range * abs(std::sin(theta * deg2rad));
-                    y_offset = range * abs(std::cos(theta * deg2rad));
-
-                    lat_offset = x_offset / 111139;
-                    long_offset = y_offset / 111139;
-
-                    if (imu_bearing > 180)
-                    {
-                        x_offset = x_offset * -1;
-                    }
-                    if (imu_bearing > 90 && imu_bearing < 270)
-                    {
-                        y_offset = y_offset * -1;
-                    }
-                    
-
-                    message_motors.data = "data,sendGPS";
-                    publisher_motors->publish(message_motors);
-                    usleep(0.75 * microsecond);
-                    
-                    current_lat = imu_command_gps(gps_string,1);
-                    current_long = imu_command_gps(gps_string,2);
-
-                    
-                    gps_lat_target = current_lat + lat_offset;
-                    gps_long_target = current_long + long_offset;
-                }
-
-                // i_needHeading = find_facing(gps_lat_target, gps_long_target, current_lat, current_long);
-                
-                
-                std::cout << std::fixed << "Calculated Heading: " << i_needHeading << std::endl \
-                    << std::endl << std::endl << std::endl;
-
-
-                message_motors.data = "auto,turningTo,15000," + std::to_string(i_needHeading);
-                publisher_motors->publish(message_motors);
-                usleep(3.5 * microsecond);
-
-                
-                rover_command = "ctrl,-0.6,-0.6";  
-                message_motors.data = rover_command;
-                RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message_motors.data.c_str());
-                publisher_motors->publish(message_motors);
-                usleep(1.5 * microsecond);
-                
-
-                rover_command = "ctrl,0,0";  
-                message_motors.data = rover_command;
-                RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message_motors.data.c_str());
-                publisher_motors->publish(message_motors);
-
-                message_motors.data = "data,getGPS";
-                publisher_motors->publish(message_motors);
-                usleep(100000);
-                current_lat = imu_command_gps(gps_string,1);
-                current_long = imu_command_gps(gps_string,2);
-
-                if ((abs(current_lat - gps_lat_target) <= 0.00002) && \
-                    ((abs(current_long - gps_long_target) <= 0.00002) ))
-                {
-                    estAttempts = 0;
-                    //FEEDBACK
-                    message_feedback.data = "Arrived at point";
-                    publisher_feedback->publish(message_feedback);
-                }
-
-
-                
-
-
-                found = false;
-                estAttempts = estAttempts - 1;
-                if (firstFrame && estAttempts == 0)
-                    break;
-                //End the Loop
-
-            }
-            //Close video Stream
-            std::cout << "Finished filming!" << std::endl;
-            inputVideo.release();
-            
-            
     
-            //FEEDBACK
-            message_feedback.data = "ARUCO Found succesfully";
-            publisher_feedback->publish(message_feedback);
-               
-            message_motors.data = "led_set,0,0,300";
-            publisher_motors->publish(message_motors);
-            std::cout << "Target Found!" << std::endl;
-            inputVideo.release();
-        }
-
-        // INTERNAL 2
-        else if (navigate_type == 11)
-        {
-            //FEEDBACK
-            message_feedback.data = "Object detected! Homing in";
-            publisher_feedback->publish(message_feedback);
-
-            message_feedback.data = "me when I lie, we ain't finding it";
-            publisher_feedback->publish(message_feedback);
-        }
-        
-
-        // Pause before stopping 
-
-
-        usleep(3 * microsecond);
-        message_motors.data = "ctrl,0,0";
-        RCLCPP_INFO(this->get_logger(), "Stopping");
-        publisher_motors->publish(message_motors);
-
-        //FEEDBACK
-        message_feedback.data = "Goal Finished";
-        publisher_feedback->publish(message_feedback);
-
-        
-        
-
-
-        // Set final state and return result
-        
-        result->final_result = final_result;
-        goal_handle->succeed(result);
-    }
     
     
     //=======================================================================//
@@ -918,7 +560,22 @@ private:
         }
     }
 
-    
+    //-------------------------------------------------------------------------
+    // Legacy AruCo Navigate
+    // Orients, then goes towards aruco relative to distance left
+    // Upgraded legacy URC 2024 code
+    //-------------------------------------------------------------------------
+    void legacy_aruco_nav()
+    {
+        publish_debug("Running Function: legacy_aruco_nav()");
+        publish_info("Begining Legacy AruCo navigation");
+        while (!(check_macula_target()) && !canceled)
+        {
+            refresh();
+            orient(macula_heading);
+            drive_meters(1);
+        }
+    }
     
     //-------------------------------------------------------------------------
     // Set LED
@@ -1038,6 +695,20 @@ private:
             return false;
     }
 
+    bool check_macula_target()
+    {
+        publish_debug("Running Function: check_macula_target()");
+        confirm_core();
+        if ((abs(current_lat - macula_lat) <= 0.000018) && \
+            ((abs(current_long - macula_long) <= 0.000018)))
+        {
+            publish_info("Within Target Bounds!");
+            return true;
+        }
+        else
+            return false;
+    }
+
 
     //-------------------------------------------------------------------------
     // Set Target Bearing
@@ -1062,6 +733,19 @@ private:
         i_neededHeading = neededHeading;
         i_neededHeading = i_neededHeading % 360;
         target_bearing = (float)i_neededHeading;
+
+        // Macula too
+        X = ( std::cos(deg2rad * macula_lat) * std::sin(deg2rad * deltaLong));
+        Y = ( std::cos(deg2rad * current_lat) * std::sin( deg2rad * macula_lat))\
+            - (std::sin(deg2rad * current_lat) * std::cos(deg2rad * macula_lat) * \
+            std::cos(deg2rad * deltaLong));
+        neededHeading = (rad2deg * atan2(X,Y)) + 360;
+
+        i_neededHeading = neededHeading;
+        i_neededHeading = i_neededHeading % 360;
+        macula_heading = (float)i_neededHeading;
+
+
     }
 
     //-------------------------------------------------------------------------
@@ -1090,21 +774,120 @@ private:
         distance_remaining = d;
     }
 
-
     //=======================================================================//
-    //= Internal Calculations                                               =//
+    //= Heavy Duty Calc                                                     =//
     //=======================================================================//
-    // Internal calculations and such. 
+    // Some heavy calculation functions
 
     //-------------------------------------------------------------------------
-    // Aruco Homing
-    // This function is called when an AruCo tag is detected, to calculate the
-    // distance to it 
+    // AruCo Range finding
     //-------------------------------------------------------------------------
-    float aruco_homing()
+    // Finds range of AruCo detected 
+    void range_aruco()
     {
+        publish_debug("Starting Function: range_aruco()");
 
+        int midpoint, pog_checker;
+        float pixelHeight, actualHeight, pixelWidth, actualWidth, distanceFromW = 0,
+            range, lastRange;
+        double x_offset, y_offset;
+        double lat_offset, long_offset;
+        double need_heading;
+        // Focal Ratio is camera dependent.
+        // For URC 2024 cam: 475.488
+        // For IP cam: 
+        // float focalRatio = 475.488;
+        float theta;
+        double deg2rad = (3.141592/180);
+        double rad2deg = (180/3.141592);
+        
+        refresh();
+        midpoint = (abs(x0_c - x1_c));
+        need_heading = current_heading + ((320 - midpoint) * -0.046875);
+
+
+        pixelHeight = y3_c - y0_c;
+        actualHeight = 0.15;
+        pixelWidth = x1_c - x0_c;
+        actualWidth = 0.15;
+        distanceFromW = (FOCAL_RATIO/pixelWidth) * actualWidth;
+        range = distanceFromW;
+        float estAttempts = range/2.5;
+
+        // get rid of weird stderr output
+        (void)pog_checker;(void)pixelHeight;(void)actualHeight;(void)lastRange;
+        (void)need_heading;(void)rad2deg;(void)estAttempts;
+        
+        theta = current_heading;
+        if (theta > 90 && theta < 180)
+        { 
+            theta = 180 - theta;
+        }
+        else if (theta > 180 && theta < 270)
+        {
+            theta = theta - 180;
+        }
+        else if (theta > 270 && theta < 360)
+        {
+            theta = 360 - theta;
+        }
+
+        // Get offsets
+        x_offset = range * abs(std::sin(theta * deg2rad));
+        y_offset = range * abs(std::cos(theta * deg2rad));
+        lat_offset = x_offset / 111139;
+        long_offset = y_offset / 111139;
+
+
+        // Fix circle
+        if (imu_bearing > 180)
+            x_offset *= -1;
+        if (imu_bearing > 90 && imu_bearing < 270)
+            y_offset*= -1;
+
+        macula_lat = current_lat + lat_offset;
+        macula_long = current_long + long_offset;
+        macula_range = range;
+
+        set_bearing();
     }
+
+    //-------------------------------------------------------------------------
+    // Camera Calibration
+    //-------------------------------------------------------------------------
+    // Using target_radius as range, this is used to find focal ratio
+    void calibrate_camera()
+    {
+        publish_debug("Starting Function: calibrate_camera()");
+
+        int midpoint, pog_checker;
+        float pixelHeight, actualHeight, pixelWidth, actualWidth, distanceFromW = 0,
+            range, lastRange;
+        double x_offset, y_offset;
+        double lat_offset, long_offset;
+        double need_heading;
+        // Focal Ratio is camera dependent.
+        // For URC 2024 cam: 475.488
+        // For IP cam: 
+        // float focalRatio = 475.488;
+        float theta;
+        double deg2rad = (3.141592/180);
+        double rad2deg = (180/3.141592);
+        
+        refresh();
+        midpoint = (abs(x0_c - x1_c));
+        need_heading = current_heading + ((320 - midpoint) * -0.046875);
+
+
+        pixelHeight = y3_c - y0_c;
+        actualHeight = 0.15;
+        pixelWidth = x1_c - x0_c;
+        actualWidth = 0.15;
+
+        float focal = (target_radius/actualWidth) * pixelWidth;
+        RCLCPP_INFO(this->get_logger(), "Find focal ratio: '%f'", focal);
+    }
+    
     //=======================================================================//
     //= ROS2 Shortcuts                                                      =//
     //=======================================================================//

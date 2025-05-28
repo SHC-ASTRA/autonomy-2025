@@ -35,6 +35,21 @@ public:
     {
         auto_client_ =
             rclcpp_action::create_client<AutoCommand>(this, "navigate_rover");
+
+        //---------------------------------------------------------------------
+        // Parameters
+        // Mission Type: Which Operation the rover performs
+        // lat: Latitude target or general input 1
+        // long: Longitude target or general input 2
+        // target radius: Target radius 
+        // period: Rate of updating
+        //---------------------------------------------------------------------
+        this->declare_parameter("mission_type",0);
+        this->declare_parameter("lat",0.00);
+        this->declare_parameter("long",0.00);
+        this->declare_parameter("radius",0);
+        this->declare_parameter("period",0.8);
+
     }
 
     void send_goal()
@@ -45,29 +60,12 @@ public:
         // Create a goal
         auto goal = AutoCommand::Goal();
 
-        // Mission Type
-        std::cout << "Mission Type:" << std::endl;
-        std::cin >> goal.mission_type; 
-        std::cout << std::endl; 
-
-        //The target latitude co-ordinate.
-        //8 decimal places
-        std::cout << "Target Latitude:" << std::endl;
-        std::cin >> goal.gps_lat_target; 
-        std::cout << std::endl; 
-
-        //The target longitude co-ordinate.
-        //8 decimal places
-        std::cout << "Target Longitude:" << std::endl;
-        std::cin >> goal.gps_long_target; 
-        std::cout << std::endl; 
-
-        //Target radius to search, for area searching;
-        std::cout << "Target Radius:" << std::endl;
-        std::cin >> goal.target_radius;
-        std::cout << std::endl;
-
-        goal.period = 0.8;
+        // Get parameters into goal
+        goal.mission_type = this->get_parameter("mission_type").as_int();
+        goal.gps_lat_target = this->get_parameter("lat").as_double();
+        goal.gps_long_target = this->get_parameter("long").as_double();
+        goal.target_radius = this->get_parameter("radius").as_double();
+        goal.period = this->get_parameter("period").as_double();
 
         // Add callbacks
         auto options = rclcpp_action::Client<AutoCommand>::SendGoalOptions();

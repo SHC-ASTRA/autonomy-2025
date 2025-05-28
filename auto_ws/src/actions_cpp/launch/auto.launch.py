@@ -10,9 +10,16 @@ def generate_launch_description():
             output='screen'
         ),
         Node(
-            package='actions_cpp',
+            package='goal',
             executable='astra_auto_client',
             name='auto_client',
-            output='screen'
-        )
+            output='screen',
+            parameters=[
+                {'mission_type': 0},
+                {'lat': 0.00},
+                {'long': 0.00},
+                {'radius': 0},
+                {'period': 0.8},
+            ]
+        ),
     ])
