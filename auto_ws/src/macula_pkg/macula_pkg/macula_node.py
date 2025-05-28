@@ -95,14 +95,14 @@ class MaculaNode(Node):
             
             msg_out.detected = True
             msg_out.object_id = int(ids[0][0])
-            msg_out.x0 = float(corners[0][0])
-            msg_out.y0 = float(corners[0][1])
-            msg_out.x1 = float(corners[1][0])
-            msg_out.y1 = float(corners[1][1])
-            msg_out.x2 = float(corners[2][0])
-            msg_out.y2 = float(corners[2][1])
-            msg_out.x3 = float(corners[3][0])
-            msg_out.y3 = float(corners[3][1])
+            msg_out.x0 = float(corners[0][0][0][0])
+            msg_out.y0 = float(corners[0][0][0][1])
+            msg_out.x1 = float(corners[0][0][1][0])
+            msg_out.y1 = float(corners[0][0][1][1])
+            msg_out.x2 = float(corners[0][0][2][0])
+            msg_out.y2 = float(corners[0][0][2][1])
+            msg_out.x3 = float(corners[0][0][3][0])
+            msg_out.y3 = float(corners[0][0][3][1])
           
         else:
             self.get_logger().debug("No markers detected.")
