@@ -5,13 +5,13 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='actions_cpp',
-            executable='astra_auto_server',
+            executable='navigate_rover_server',
             name='auto_server',
             output='screen'
         ),
         Node(
-            package='goal',
-            executable='astra_auto_client',
+            package='actions_cpp',
+            executable='goal',
             name='auto_client',
             output='screen',
             parameters=[

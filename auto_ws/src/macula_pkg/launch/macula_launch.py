@@ -20,23 +20,23 @@ def generate_launch_description():
         declare_arg,
         Node(
         package='macula_pkg',
-        executable='macula_node.py',
+        executable='macula',
         name='macula_node',
         output='screen',
         parameters=[
             {'camera_ip': LaunchConfiguration("camera_ip")}
             ],    
-        ) ,
-        Node(
-        package='actions_cpp',
-        executable='navigate_rover_server',
-        name='auto_server',
-        output='screen',    
-        ) ,
-        Node(
-        package='actions_cpp',
-        executable='navigate_rover_client',
-        name='auto_client',
-        output='screen',    
-        )
+        ) #,
+        # Node(
+        # package='actions_cpp',
+        # executable='navigate_rover_server',
+        # name='auto_server',
+        # output='screen',    
+        # ) ,
+        # Node(
+        # package='actions_cpp',
+        # executable='navigate_rover_client',
+        # name='auto_client',
+        # output='screen',    
+        # )
     ])

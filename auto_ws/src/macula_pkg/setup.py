@@ -24,7 +24,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'macula = macula_pkg.macula_node.py:main',
+            'macula = macula_pkg.macula_node:main',
         ],
     },
 )
