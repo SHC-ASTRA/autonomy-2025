@@ -88,21 +88,32 @@ class MaculaNode(Node):
         msg_out = msg.MaculaFeedback()
         
         if ids is not None:
-            self.get_logger().debug(f"Detected ArUco IDs: {ids.flatten()}")
-            self.get_logger().debug(f"Detected ArUco corners: {corners[0]}")
+            self.get_logger().info(f"Detected ArUco IDs: {ids.flatten()}")
+            self.get_logger().info(f"Detected ArUco corners: {corners[0]}")
             
-            # Publish msg
-            
-            msg_out.detected = True
-            msg_out.object_id = int(ids[0][0])
-            msg_out.x0 = float(corners[0][0][0][0])
-            msg_out.y0 = float(corners[0][0][0][1])
-            msg_out.x1 = float(corners[0][0][1][0])
-            msg_out.y1 = float(corners[0][0][1][1])
-            msg_out.x2 = float(corners[0][0][2][0])
-            msg_out.y2 = float(corners[0][0][2][1])
-            msg_out.x3 = float(corners[0][0][3][0])
-            msg_out.y3 = float(corners[0][0][3][1])
+            for i in range(len(ids)):
+                # Draw borders around detected markers
+                cv2.polylines(image, [np.int32(corners[i])], True, (255, 0, 0), 2)
+
+                # Calculate the center of the marker
+                mid_x = int(np.mean(corners[i][0][:, 0]))
+                mid_y = int(np.mean(corners[i][0][:, 1]))
+
+                cv2.putText(image, f"ID: {ids[i][0]}", (mid_x, mid_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                # rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners[i], self.marker_length, self.camera_matrix, self.dist_coeffs)
+                # cv2.drawFrameAxes(image, self.camera_matrix, self.dist_coeffs, rvec, tvec, self.marker_length * 0.5)
+                self.image = image
+                
+                msg_out.detected = True
+                msg_out.object_id = int(ids[0][0])
+                msg_out.x0 = float(corners[0][0][0][0])
+                msg_out.y0 = float(corners[0][0][0][1])
+                msg_out.x1 = float(corners[0][0][1][0])
+                msg_out.y1 = float(corners[0][0][1][1])
+                msg_out.x2 = float(corners[0][0][2][0])
+                msg_out.y2 = float(corners[0][0][2][1])
+                msg_out.x3 = float(corners[0][0][3][0])
+                msg_out.y3 = float(corners[0][0][3][1])
           
         else:
             self.get_logger().debug("No markers detected.")
