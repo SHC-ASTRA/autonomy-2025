@@ -403,7 +403,7 @@ private:
                 publish_debug("Started mission -1");
                 for (int i = 0; i < 11; i++)
                 {
-                    while (holdMacula = 0);
+                    while (holdMacula == 0);
                     range_aruco();
                     RCLCPP_INFO(this->get_logger(), "Found Macula Range: '%f'", macula_range);
                     RCLCPP_INFO(this->get_logger(), "Found Macula Lat: '%f'", macula_lat);
@@ -804,7 +804,7 @@ private:
         double deg2rad = (3.141592/180);
         double rad2deg = (180/3.141592);
         
-        // refresh();
+        refresh();
         midpoint = (abs(x0_c - x1_c));
         need_heading = current_heading + ((320 - midpoint) * -0.046875);
 
@@ -863,7 +863,7 @@ private:
     {
         publish_info("Starting Function: calibrate_camera()");
 
-        int midpoint, pog_checker;
+        float midpoint, pog_checker;
         float pixelHeight, actualHeight, pixelWidth, actualWidth, distanceFromW = 0,
             range, lastRange;
         double x_offset, y_offset;
@@ -877,7 +877,7 @@ private:
         double deg2rad = (3.141592/180);
         double rad2deg = (180/3.141592);
         
-        // refresh();
+        refresh();
         midpoint = (abs(x0_c - x1_c));
         need_heading = current_heading + ((320 - midpoint) * -0.046875);
 
