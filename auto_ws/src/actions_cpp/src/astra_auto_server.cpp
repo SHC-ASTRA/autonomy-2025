@@ -494,6 +494,14 @@ private:
             message.right_stick = -0.7;
             publisher_core->publish(message);
         }
+        // Go forwards, slowly
+        else if (state == 3)
+        {
+            publish_info("Going Forward Slowly!");
+            message.left_stick = .3;
+            message.right_stick = .3;
+            publisher_core->publish(message);
+        }
         // Warn, stop! Invalid input
         else 
         {
@@ -554,12 +562,12 @@ private:
         {
             refresh();
             orient(target_bearing);
-            if (distance_remaining >= 15)
-                drive_meters(10);
+            if (distance_remaining >= 20)
+                drive_time(10.0);
             else if (distance_remaining >= 10)
-                drive_meters(5);
+                drive_meters(5.0);
             else if (distance_remaining >= 5)
-                drive_meters(1);
+                drive_meters(1.0);
         }
     }
 
@@ -595,25 +603,25 @@ private:
         
         switch (color) {
             case 0:
-            publish_info("Turning off LED");
-            command.data = "led_set,0,0,0";
-            break;
+                publish_info("Turning off LED");
+                command.data = "led_set,0,0,0";
+                break;
             case 1:
-            publish_info("Turning LED red");
-            command.data = "led_set,255,0,0";
-            break;
+                publish_info("Turning LED red");
+                command.data = "led_set,255,0,0";
+                break;
             case 2:
-            publish_info("Turning LED Green");
-            command.data = "led_set,0,255,0";
-            break;
+                publish_info("Turning LED Green");
+                command.data = "led_set,0,255,0";
+                break;
             case 3:
-            publish_info("Turning LED Blue");
-            command.data = "led_set,0,0,255";
-            break;
+                publish_info("Turning LED Blue");
+                command.data = "led_set,0,0,255";
+                break;
             default:
-            publish_info("Turning off LED");
-            publish_warn("Recieved unknown LED command. Turning off LED and proceeding");
-            command.data = "led_set,0,0,0";
+                publish_info("Turning off LED");
+                publish_warn("Recieved unknown LED command. Turning off LED and proceeding");
+                command.data = "led_set,0,0,0";
             break;
             
         }
@@ -621,10 +629,39 @@ private:
     }
     
     //-------------------------------------------------------------------------
+    // Drive Time
+    // This function sends to /core/control to run the rover forward for an 
+    // inputted float of time. 
+    //-------------------------------------------------------------------------
+    void drive_time(float duration)
+    {
+        publish_info("Running Function: drive_time()");
+        set_distance_remaining();
+        if (distance_remaining < 10)
+        {
+            set_motors(3);
+            usleep(duration * SECOND);
+            set_motors(0);
+        }
+        else 
+        {
+            set_motors(1);
+            usleep(duration * SECOND);
+            set_motors(0);
+        }
+
+    }
+
+    //-------------------------------------------------------------------------
     // Drive Meters
     // This function sends to /anchro/relay a command to drive the rover
     // x meters forward (backwards if negative)
     //-------------------------------------------------------------------------
+    //#########################################################################
+    // WARNING
+    // The embedded side of this has not been tested
+    // Might do nothing
+    //#########################################################################
     void drive_meters(float meters)
     {
         publish_info("Running Function: drive_meters()");
@@ -890,6 +927,18 @@ private:
         float focal = (target_radius/actualWidth) * pixelWidth;
         RCLCPP_INFO(this->get_logger(), "Find focal ratio: '%f'", focal);
     }
+
+
+    //-------------------------------------------------------------------------
+    // Create Box
+    // Used to create the box to search around the point, for AruCo and Obj
+    // detect
+    //-------------------------------------------------------------------------
+    void set_search_box(int stage)
+    {
+        
+    }
+    
     
     //=======================================================================//
     //= ROS2 Shortcuts                                                      =//
