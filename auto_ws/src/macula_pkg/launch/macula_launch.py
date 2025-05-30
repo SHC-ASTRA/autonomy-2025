@@ -15,16 +15,23 @@ def generate_launch_description():
         default_value="12", # Default camera IP, change to front rover
         description="Set camera ID for the camera to use for detection"
     )
+    declare_mode = DeclareLaunchArgument(
+        "detection_type",
+        default_value="1", # Default to ArUco detection
+        description="Set detection type: 1 for ArUco, 2 for Object"
+    )
 
     return LaunchDescription([
         declare_arg,
+        declare_mode,
         Node(
         package='macula_pkg',
         executable='macula',
         name='macula_node',
         output='screen',
         parameters=[
-            {'camera_ip': LaunchConfiguration("camera_ip")}
+            {'camera_ip': LaunchConfiguration("camera_ip")},
+            {'detection_type': LaunchConfiguration("detection_type")},
             ],    
         ) #,
         # Node(
