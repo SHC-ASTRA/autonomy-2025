@@ -100,11 +100,7 @@ class MaculaNode(Node):
                 mid_y = int(np.mean(corners[i][0][:, 1]))
 
                 cv2.putText(image, f"ID: {ids[i][0]}", (mid_x, mid_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                # rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners[i], self.marker_length, self.camera_matrix, self.dist_coeffs)
-                # cv2.drawFrameAxes(image, self.camera_matrix, self.dist_coeffs, rvec, tvec, self.marker_length * 0.5)
                 self.image = image
-                
-                
                 
                 msg_out.detected = True
                 msg_out.object_id = int(ids[0][0])
@@ -138,36 +134,36 @@ class MaculaNode(Node):
         msg_out.detected = False
         
         for result in results.boxes.data.tolist():
-                x1, y1, x2, y2, score, class_id = result
+            x1, y1, x2, y2, score, class_id = result
 
-                # Append to detected objects list
-                detected_objects.extend([class_id, score])
-                self.get_logger().info(f"Detected object: {class_id}, Confidence: {score}")
+            # Append to detected objects list
+            detected_objects.extend([class_id, score])
+            self.get_logger().info(f"Detected object: {class_id}, Confidence: {score}")
+            
+            if score > self.threshold:
+                msg_out.detected = True
                 
-                if score > self.threshold:
-                    msg_out.detected = True
-                    
-                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 4)
-                    cv2.putText(frame, results.names[int(class_id)].upper(), (int(x1), int(y1 - 10)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3, cv2.LINE_AA)
-                    cv2.putText(frame, str(round(score, 2)), (int(x2 - 10), int(y1)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3, cv2.LINE_AA)
-                    
-                # Set Object ID
-                if class_id == 1:
-                    msg_out.object_id = 51  # Mallet
-                elif class_id == 0:
-                    msg_out.object_id = 52 # Bottle
-                    
-                # Corners
-                msg_out.x0 = float(x1)
-                msg_out.y0 = float(y1)
-                msg_out.x1 = float(x2)
-                msg_out.y1 = float(y1)
-                msg_out.x2 = float(x2)
-                msg_out.y2 = float(y2)
-                msg_out.x3 = float(x1)
-                msg_out.y3 = float(y2)
+                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 4)
+                cv2.putText(frame, results.names[int(class_id)].upper(), (int(x1), int(y1 - 10)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3, cv2.LINE_AA)
+                cv2.putText(frame, str(round(score, 2)), (int(x2 - 10), int(y1)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3, cv2.LINE_AA)
+                
+            # Set Object ID
+            if class_id == 1:
+                msg_out.object_id = 51  # Mallet
+            else:
+                msg_out.object_id = 52 # Bottle
+                
+            # Corners
+            msg_out.x0 = float(x1)
+            msg_out.y0 = float(y1)
+            msg_out.x1 = float(x2)
+            msg_out.y1 = float(y1)
+            msg_out.x2 = float(x2)
+            msg_out.y2 = float(y2)
+            msg_out.x3 = float(x1)
+            msg_out.y3 = float(y2)
                 
         # Publish feedback message
         self.macula_feedback.publish(msg_out)
