@@ -3,7 +3,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose
-from ros2_interfaces_pkg import msg
+from ros2_interfaces_pkg import msg as my_msg
 
 
 class GoalSender(Node):
@@ -21,7 +21,7 @@ class GoalSender(Node):
         self.get_logger().info(f"Received external goal: {msg}")
         goal_msg = NavigateToPose.Goal()
         # If your external msg already is a PoseStamped, you can assign directly:
-        goal_msg.pose = msg
+        goal_msg.pose = my_msg.CoreControl
         # Otherwise map from your fields:
         # goal_msg.pose.header.frame_id = 'map'
         # goal_msg.pose.pose.position.x = msg.x

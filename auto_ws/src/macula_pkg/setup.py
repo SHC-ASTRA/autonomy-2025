@@ -11,11 +11,16 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
+        ('share/' + package_name + '/models', ['models/best.pt']),
         ('share/' + package_name, ['package.xml']),
         # Include Launch Files
         (os.path.join('share', package_name, 'launch'), glob('launch/*'))
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'ultralytics',
+        'torch',
+                      ],
     zip_safe=True,
     maintainer='ozy',
     maintainer_email='daeganbrown03@gmail.com',

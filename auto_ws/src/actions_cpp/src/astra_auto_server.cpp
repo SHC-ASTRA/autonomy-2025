@@ -21,19 +21,20 @@
 // #include "pathfind.h"                       // My functions
 
 //ROS2 includes
-#include "rclcpp/rclcpp.hpp"                // General ROS2 stuff
+#include "rclcpp/rclcpp.hpp"                // General ROS2 stuff 
 #include "rclcpp_action/rclcpp_action.hpp"  // ROS2 actions info
 #include "rclcpp/subscription_options.hpp"  // ROS2 subsriber info
 #include "std_msgs/msg/string.hpp"          // Message type for ROS2
+#include "nav_msgs/msg/path.hpp"
 
 //openCV shenanigans
-#include <opencv2/opencv.hpp>                   //
-#include <opencv2/core.hpp>                     //
-#include <opencv2/aruco.hpp>                    //
-#include <opencv2/videoio.hpp>                  //
-#include <opencv2/highgui.hpp>                  //
-#include <opencv2/objdetect/aruco_detector.hpp> //
-#include <opencv2/calib3d.hpp>                  //
+// #include <opencv2/opencv.hpp>                   //
+// #include <opencv2/core.hpp>                     //
+// #include <opencv2/aruco.hpp>                    //
+// #include <opencv2/videoio.hpp>                  //
+// #include <opencv2/highgui.hpp>                  //
+// #include <opencv2/objdetect/aruco_detector.hpp> //
+// #include <opencv2/calib3d.hpp>                  //
 
 // ROS2 Interfaces
 #include "ros2_interfaces_pkg/action/auto_command.hpp"
@@ -43,12 +44,15 @@
 #include "ros2_interfaces_pkg/msg/auto_nav.hpp" 
 #include "ros2_interfaces_pkg/msg/macula_feedback.hpp"
 
-//=============================
+//=============================================================================
 // Definitions
-//=============================
+//=============================================================================
 
 #define SECOND 1000000
 #define FOCAL_RATIO 673.333313
+#define HAMMER_RATIO 1
+#define BOTTLE_RATIO 1
+
 //=============================================================================
 // Predeclarations
 //=============================================================================
@@ -80,6 +84,10 @@ int object_id;
 float x0_c, x1_c, x2_c, x3_c, y0_c, y1_c, y2_c, y3_c;
 
 
+// Nav
+double nav_x, nav_y, nav_z;
+
+
 
 // Flags
 bool canceled = 0;
@@ -90,6 +98,7 @@ bool hammerFound = 0;
 bool bottleFound = 0;
 bool navFail = 1;
 bool holdMacula = 0;
+bool navHold = 0;
 
 
 
@@ -112,6 +121,9 @@ public:
             "/anchor/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::anchor_callback, this, _1));
         subscriber_macula_ = this->create_subscription<ros2_interfaces_pkg::msg::MaculaFeedback>(
             "/auto/macula", 10, std::bind(&NavigateRoverSubscriberNode::macula_callback, this, _1));
+        subscriber_nav_ = this->create_subscription<nav_msgs::msg::Path>(
+            "local_plan", 10, std::bind(&NavigateRoverSubscriberNode::plan_callback, this, _1));
+        
         
         
         
@@ -153,12 +165,12 @@ private:
     {
         if (!msg.detected || holdMacula == 1)
         {
-            if (holdMacula == 0)
-            {
-                hammerFound = 0;
-                bottleFound = 0;
-                arucoFound = 0;
-            }
+            // if (holdMacula == 0)
+            // {
+            //     hammerFound = 0;
+            //     bottleFound = 0;
+            //     arucoFound = 0;
+            // }
             return;
         }    
         RCLCPP_INFO(this->get_logger(), "Spotted target in frame");
@@ -171,7 +183,7 @@ private:
             hammerFound = 1;
 
         }
-        else if (msg.object_id == 51)
+        else if (msg.object_id == 52)
         {
             RCLCPP_INFO(this->get_logger(), "Water Bottle Detected!");
             bottleFound = 1;
@@ -198,6 +210,23 @@ private:
         holdMacula = 1;
     }
 
+    void plan_callback(const nav_msgs::msg::Path::SharedPtr msg)
+    {
+        if (!navHold)
+        {
+            const auto & first_pose = msg->poses[0].pose;
+            nav_x = first_pose.position.x;
+            nav_y = first_pose.position.y;
+            nav_z = first_pose.position.z;
+
+            RCLCPP_INFO(get_logger(),
+              "Next waypoint → x: %.3f, y: %.3f, z: %.3f",
+              nav_x, nav_y, nav_z);
+
+            // navhold = 1
+        }
+    }
+
 
     //=======================================================================//
     //= Internal Variables                                                  =//
@@ -209,6 +238,7 @@ private:
     rclcpp::Subscription<ros2_interfaces_pkg::msg::CoreFeedback>::SharedPtr subscriber_core_;
     rclcpp::Subscription<ros2_interfaces_pkg::msg::MaculaFeedback>::SharedPtr subscriber_macula_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscriber_anchor_;
+    rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr subscriber_nav_;
 
 };
 
@@ -267,6 +297,8 @@ private:
     float distance_remaining;
 
 
+
+
     //=======================================================================//
     //= ROS2 Action Standard Functions                                      =//
     //=======================================================================//
@@ -284,7 +316,7 @@ private:
         
         RCLCPP_INFO(this->get_logger(), "Recieved Goal");
         // Invalid mission types
-        if (goal->mission_type > 15 || goal->mission_type < -2)
+        if (goal->mission_type > 15 || goal->mission_type < -5)
         {   
             publish_info("Rejected Goal! Out of bounds!");
             return rclcpp_action::GoalResponse::REJECT;
@@ -373,27 +405,82 @@ private:
                     usleep(4 * SECOND);
                     set_led(1);
                     // Update bearing and orient to it
-                    // set_bearing();
-                    // orient(target_bearing);
+                    set_bearing();
+                    orient(target_bearing);
                     result->final_result = 1;
                 }
                 break;
             //-----------------------------------------------------------------
-            // Case 1:
+            // Case 1: GNSS Legacy
             // Rover will point to target, drive forward 3 seconds, then 
             // repeat until within target radius or goal is canceled.
             //-----------------------------------------------------------------
-            case 1:
-                while (!(check_target()) && !(goal_handle->is_canceling()) && !(navFail))
-                {
-
-                }
-                if (navFail)
-                {
-                    legacy_nav();
-                }
+            case 1: 
+                publish_info("Spinning up Legacy Nav");
+                legacy_nav();
+                break;
+            
+            //-----------------------------------------------------------------
+            // Case 2: AruCo Legacy
+            // Rover will point to target, drive forward 3 seconds, then 
+            // repeat until within target radius or goal is canceled.
+            //-----------------------------------------------------------------
+            case 2: 
+                publish_info("Spinning up Legacy AruCo!");
+                legacy_aruco_nav();
                 break;
 
+
+            //-----------------------------------------------------------------
+            // Case 3: Object Detection Legacy (Hammer)
+            // Rover will point to target, drive forward 3 seconds, then 
+            // repeat until within target radius or goal is canceled.
+            //-----------------------------------------------------------------
+            case 3: 
+                publish_info("Spinning up Legacy Hammer Detection!");
+                legacy_obj_nav();
+                break;
+                
+            //-----------------------------------------------------------------
+            // Case 4: Bottle Detection Legacy
+            //-----------------------------------------------------------------
+            case 4:
+                publish_info("Spinning up Legacy Bottle Detection!");
+                break;
+            
+            //-----------------------------------------------------------------
+            // Case 5: GNSS SLAM
+            //-----------------------------------------------------------------
+            case 4:
+                publish_info("Spinning up Legacy Bottle Detection!");
+                break;
+            
+
+            //-----------------------------------------------------------------
+            // Case 6: AruCo SLAM
+            //-----------------------------------------------------------------
+            case 4:
+                publish_info("Spinning up Legacy Bottle Detection!");
+                break;
+            
+
+            //-----------------------------------------------------------------
+            // Case 7: Hammer Detection SLAM
+            //-----------------------------------------------------------------
+            case 4:
+                publish_info("Spinning up Legacy Bottle Detection!");
+                break;
+            
+
+            //-----------------------------------------------------------------
+            // Case 8: Bottle Detection SLAM
+            //-----------------------------------------------------------------
+            case 4:
+                publish_info("Spinning up Legacy Bottle Detection!");
+                break;
+            
+
+            
             //-----------------------------------------------------------------
             // Case -1: 
             // Needs to run with Macula to test rangefinding. 
@@ -401,7 +488,7 @@ private:
             //-----------------------------------------------------------------
             case -1:
                 publish_info("Started mission -1");
-                for (int i = 0; i < 11; i++)
+                for (int i = 0; i < 5; i++)
                 {
                     while (holdMacula == 0);
                     range_aruco();
@@ -422,6 +509,16 @@ private:
                 calibrate_camera();
                 t_result = 0;
                 break;
+            //-----------------------------------------------------------------
+            // Case -3:
+            // Determine bounding box size
+            //-----------------------------------------------------------------
+            case -3:
+                publish_info("Started mission -3");
+                while (!(hammerFound || bottleFound));
+                usleep(.5 * SECOND);
+                RCLCPP_INFO(this->get_logger(), "Found bounding box size: '%f'", bounding_box_ratio());
+            
         }
         if (goal_handle->is_canceling())
         {
@@ -565,9 +662,9 @@ private:
             if (distance_remaining >= 20)
                 drive_time(10.0);
             else if (distance_remaining >= 10)
-                drive_meters(5.0);
+                drive_time(5.0);
             else if (distance_remaining >= 5)
-                drive_meters(1.0);
+                drive_time(1.0);
         }
     }
 
@@ -580,14 +677,108 @@ private:
     {
         publish_info("Running Function: legacy_aruco_nav()");
         publish_info("Begining Legacy AruCo navigation");
+        int state = 1;
+        for (state = 1; state <= 8; state++)
+        {
+            // Check flag for spotted tag
+            if (arucoFound)
+                break;
+            set_search_box(state);
+            refresh();
+            if (distance_remaining >= 20)
+                drive_time(10.0);
+            else if (distance_remaining >= 10)
+                drive_time(5.0);
+            else if (distance_remaining >= 5)
+                drive_time(1.0);
+            
+            if (check_target())
+                state++;
+            
+
+        }
+        face_aruco();
+
         while (!(check_macula_target()) && !canceled)
         {
             refresh();
+            range_aruco();
             orient(macula_heading);
-            drive_meters(1);
+            drive_time(1.5);
+            // Reset flag to get new bearing
+            arucoFound = 0;
+
         }
     }
-    
+
+    //-------------------------------------------------------------------------
+    // Legacy Obj Navigate
+    // Orients, then goes towards target object. Uses mission type to choose 
+    // Hammer or Bottle 
+    //-------------------------------------------------------------------------
+    void legacy_obj_nav()
+    {
+        publish_debug("Running Function: legacy_obj_nav()");
+
+        int state = 1;
+        for (state = 1; state <= 8; state++)
+        {
+            // Check flag for spotted tag
+            if (hammerFound || bottleFound)
+                break;
+            set_search_box(state);
+            refresh();
+            if (distance_remaining >= 20)
+                drive_time(10.0);
+            else if (distance_remaining >= 10)
+                drive_time(5.0);
+            else if (distance_remaining >= 5)
+                drive_time(1.0);
+            
+            if (check_target())
+                state++;
+            
+
+        }
+
+        if (mission_type == 3)
+        {
+
+        }   
+        else if (mission_type == 4)
+        {
+
+        } 
+    }
+
+    //-------------------------------------------------------------------------
+    // Face AruCo
+    // Turns until the AruCo is in central frame
+    //-------------------------------------------------------------------------
+    void face_aruco()
+    {
+        while ( std::min(std::min(x0_c, x1_c), std::min(x2_c, x3_c)) <=320 )
+        {
+            confirm_core();
+            if ( std::min(std::min(x0_c, x1_c), std::min(x2_c, x3_c)) >= 200 )
+            {
+                orient(current_heading + 5);
+            }
+            else if ( std::min(std::min(x0_c, x1_c), std::min(x2_c, x3_c)) >= 100 )
+            {
+                orient(current_heading + 10);
+            }
+            else 
+            {
+                orient(current_heading + 15);
+            }
+            arucoFound = 0;
+            hammerFound = 0;
+            bottleFound = 0;
+            holdMacula = 0;
+        }
+    }
+
     //-------------------------------------------------------------------------
     // Set LED
     // Changes LED color
@@ -637,7 +828,8 @@ private:
     {
         publish_info("Running Function: drive_time()");
         set_distance_remaining();
-        if (distance_remaining < 10)
+        set_bearing();
+        if (distance_remaining < 10 || macula_range < 10)
         {
             set_motors(3);
             usleep(duration * SECOND);
@@ -680,8 +872,23 @@ private:
         publish_info("Went the distance");
     }
 
-    
-    
+    //-------------------------------------------------------------------------
+    // Approach Object
+    // Using bounding box, get close to object until required ratio is met
+    //-------------------------------------------------------------------------
+    void approach_object(float ratio)
+    {
+        refresh();
+        face_aruco();
+        holdMacula = 0;
+        while (bounding_box_ratio() < ratio)
+        {
+            drive_time(1.0);
+            holdMacula = 0;
+            usleep(0.2 * SECOND);
+        }
+    }
+
     //=======================================================================//
     //= Refresh Functions                                                   =//
     //=======================================================================//
@@ -933,13 +1140,91 @@ private:
     // Create Box
     // Used to create the box to search around the point, for AruCo and Obj
     // detect
+    // Warning: This resets gps targets
+    //          +lat
+    //        1   8   3
+    //  -long 7   0   5  +long
+    //        4   6   2
+    //          -lat
     //-------------------------------------------------------------------------
     void set_search_box(int stage)
     {
-        
+        // Get offsets
+        double offset_lat = target_radius * (1/111139);
+        double offset_long = target_radius * (1/(111111 * std::cos(target_lat)));
+
+        switch (stage) {
+            case (1):
+                target_lat += offset_lat;
+                target_long -= offset_long;
+                break;
+            case (2):
+                target_lat -= 2 * offset_lat;
+                target_long += 2 * offset_long;
+                break;
+            case (3):
+                target_lat += 2 * offset_lat;
+                break;
+            case (4):
+                target_lat -= 2 * offset_lat;
+                target_long -= 2 * offset_long;
+                break;
+            case (5):
+                target_lat += offset_lat;
+                target_long += 2 * offset_long;
+                break;
+            case (6):
+                target_lat -= offset_lat;
+                target_long -= offset_long;
+                break;
+            case (7):
+                target_lat += offset_lat;
+                target_long -= offset_long;
+                break;
+            case (8):
+                target_lat += offset_lat;
+                target_long += offset_long;
+                break;
+            case (0):
+                target_lat -= offset_lat;
+            default:
+                publish_warn("In set_search_box in astra_auto_server.cpp, sent invalid stage!");
+        }
+
     }
     
-    
+    //-------------------------------------------------------------------------
+    // Reset Targets
+    // Sets GPS targets back to parameters
+    //-------------------------------------------------------------------------
+    void reset_target(
+        const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
+    {
+        publish_debug("Running Function: reset_target()");
+        publish_info("Resetting target GPS to mission target!");
+        target_lat = goal_handle->get_goal()->gps_lat_target;
+        target_long = goal_handle->get_goal()->gps_long_target;
+
+    }
+
+    //-------------------------------------------------------------------------
+    // Finds Bounding box ratio
+    //-------------------------------------------------------------------------
+    float bounding_box_ratio()
+    {
+        publish_debug("Running Function: bounding_box_ratio()");
+        //---------------------------------------------------------------------
+        // Camera is 720 p, that is, 720 x 1280, which is 921,600 pixels
+        // So the size of the box, width x height, divide by 921,600 will give
+        // the apropriate ratio of bounding box.
+        ///--------------------------------------------------------------------
+        float width = abs(x0_c - x1_c);
+        float height = abs(y0_c - y3_c);
+
+        float box = width * height;
+        return (box / 921600);
+    }
+
     //=======================================================================//
     //= ROS2 Shortcuts                                                      =//
     //=======================================================================//
@@ -986,11 +1271,11 @@ private:
 //====================================================================================
 int main(int argc, char **argv)
 {
-    //Generates AruCo tags
-    cv::Mat markerImage;
-    cv::aruco::Dictionary dictionary1 = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
-    cv::aruco::generateImageMarker(dictionary1, 1, 200, markerImage, 1);
-    cv::imwrite("marker2.png", markerImage);
+    // //Generates AruCo tags
+    // cv::Mat markerImage;
+    // cv::aruco::Dictionary dictionary1 = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
+    // cv::aruco::generateImageMarker(dictionary1, 1, 200, markerImage, 1);
+    // cv::imwrite("marker2.png", markerImage);
 
     //Camera stuff for OpenCV
     
