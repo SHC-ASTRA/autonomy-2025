@@ -20,7 +20,7 @@ os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
 class MaculaNode(Node):
     def __init__(self):
         super().__init__('macula_node')
-        self.get_logger().debug("Macula Node has been started.")
+        self.get_logger().info("Macula Node has been started.")
 
         # Get mission type from parameter
         self.declare_parameter("detection_type", 1) # Default to ArUco
@@ -104,6 +104,8 @@ class MaculaNode(Node):
                 # cv2.drawFrameAxes(image, self.camera_matrix, self.dist_coeffs, rvec, tvec, self.marker_length * 0.5)
                 self.image = image
                 
+                
+                
                 msg_out.detected = True
                 msg_out.object_id = int(ids[0][0])
                 msg_out.x0 = float(corners[0][0][0][0])
@@ -116,11 +118,16 @@ class MaculaNode(Node):
                 msg_out.y3 = float(corners[0][0][3][1])
           
         else:
-            self.get_logger().debug("No markers detected.")
+            self.get_logger().info("No markers detected.")
             msg_out.detected = False
         
         # Publish feedback message
         self.macula_feedback.publish(msg_out)
+        
+        # -------------------FOR TESTING-------------------
+        frame = cv2.resize(image, (0, 0), fx=0.5, fy=0.5)
+        cv2.imshow("Aruco Detection", frame)
+        cv2.waitKey(1)
         
     def detect_objects(self):
         frame = self.frame
@@ -135,15 +142,21 @@ class MaculaNode(Node):
 
                 # Append to detected objects list
                 detected_objects.extend([class_id, score])
-                self.get_logger().debug(f"Detected object: {class_id}, Confidence: {score}")
+                self.get_logger().info(f"Detected object: {class_id}, Confidence: {score}")
                 
                 if score > self.threshold:
                     msg_out.detected = True
                     
+                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 4)
+                    cv2.putText(frame, results.names[int(class_id)].upper(), (int(x1), int(y1 - 10)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3, cv2.LINE_AA)
+                    cv2.putText(frame, str(round(score, 2)), (int(x2 - 10), int(y1)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3, cv2.LINE_AA)
+                    
                 # Set Object ID
-                if class_id == 0:
+                if class_id == 1:
                     msg_out.object_id = 51  # Mallet
-                elif class_id == 1:
+                elif class_id == 0:
                     msg_out.object_id = 52 # Bottle
                     
                 # Corners
@@ -155,10 +168,15 @@ class MaculaNode(Node):
                 msg_out.y2 = float(y2)
                 msg_out.x3 = float(x1)
                 msg_out.y3 = float(y2)
-        
+                
         # Publish feedback message
         self.macula_feedback.publish(msg_out)
         
+        # ----------------------FOR DEBUG----------------------
+        frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
+        cv2.imshow("Object Detection", frame)
+        cv2.waitKey(1)
+                
     def destroy_node(self):
         if self.cap.isOpened():
             self.cap.release()
