@@ -48,7 +48,7 @@
 //=============================
 
 #define SECOND 1000000
-#define FOCAL_RATIO 700.000
+#define FOCAL_RATIO 673.333313
 //=============================================================================
 // Predeclarations
 //=============================================================================
@@ -127,16 +127,16 @@ private:
         {
             RCLCPP_INFO(this->get_logger(), "Recieved Core Feedback!");
             coreWait = 0;
+            RCLCPP_INFO(this->get_logger(), "Recieved Orientation: '%f' ", current_heading);
+            RCLCPP_INFO(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
+            RCLCPP_INFO(this->get_logger(), "Recieved Longitude: '%f' ", current_long);
+            RCLCPP_INFO(this->get_logger(), "With '%d' satellites", sats);
         }
         current_heading = msg.orientation;
         current_lat = msg.gps_lat;
         current_long = msg.gps_long;
         sats = msg.gps_sats;
 
-        RCLCPP_DEBUG(this->get_logger(), "Recieved Orientation: '%f' ", current_heading);
-        RCLCPP_DEBUG(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
-        RCLCPP_DEBUG(this->get_logger(), "Recieved Longitude: '%f' ", current_long);
-        RCLCPP_DEBUG(this->get_logger(), "With '%d' satellites", sats);
     }
 
     void anchor_callback(const std_msgs::msg::String & msg)
@@ -350,7 +350,7 @@ private:
         if (goal_handle->is_canceling())
         {
             publish_info("Goal was canceled!");
-            publish_debug("Cancel happened right before switch in execute_goal().");
+            publish_info("Cancel happened right before switch in execute_goal().");
             set_led(0);
 
         }
@@ -373,9 +373,9 @@ private:
                     usleep(4 * SECOND);
                     set_led(1);
                     // Update bearing and orient to it
-                    set_bearing();
-                    orient(target_bearing);
-                        result->final_result = 1;
+                    // set_bearing();
+                    // orient(target_bearing);
+                    result->final_result = 1;
                 }
                 break;
             //-----------------------------------------------------------------
@@ -400,7 +400,7 @@ private:
             // Will publish found range 10 times, then exit with result.
             //-----------------------------------------------------------------
             case -1:
-                publish_debug("Started mission -1");
+                publish_info("Started mission -1");
                 for (int i = 0; i < 11; i++)
                 {
                     while (holdMacula == 0);
@@ -417,7 +417,7 @@ private:
             // Runs case -1 in reverse, using target radius as the range. 
             //-----------------------------------------------------------------
             case -2:
-                publish_debug("Started mission -2");
+                publish_info("Started mission -2");
                 while (!holdMacula);
                 calibrate_camera();
                 t_result = 0;
@@ -426,7 +426,7 @@ private:
         if (goal_handle->is_canceling())
         {
             publish_info("Goal was canceled!");
-            publish_debug("Cancel happened during switch.");
+            publish_info("Cancel happened during switch.");
             set_led(0);
         }
 
@@ -440,11 +440,11 @@ private:
         for (int i = 0; i < 5; i++)
         {
             set_led(2);
-            usleep(0.5 * SECOND);
-            set_led(0);
-            usleep(0.5 * SECOND);
+            usleep(1.1 * SECOND);
+            set_led(3);
+            usleep(1.1 * SECOND);
         }
-        set_led(2);
+        set_led(0);
 
     }
     
@@ -467,7 +467,7 @@ private:
     //-------------------------------------------------------------------------
     void set_motors(int state)
     {
-        publish_debug("Running Function: set_motors()");
+        publish_info("Running Function: set_motors()");
         auto message = ros2_interfaces_pkg::msg::CoreControl();
 
         // Stop
@@ -515,10 +515,10 @@ private:
     
     void orient(float bearing)
     {
-        publish_debug("Running Function: orient()");
+        publish_info("Running Function: orient()");
         // Create and populate message and 
         auto message = ros2_interfaces_pkg::msg::CoreControl();
-        message.turn_to_enable = false;
+        message.turn_to_enable = true;
         message.turn_to = bearing;
         message.turn_to_timeout = 10;
         std::string msg = "Turning to face " + std::to_string(bearing); 
@@ -526,7 +526,7 @@ private:
         
         
         do {
-            publish_debug(c_msg);
+            publish_info(c_msg);
 
             publisher_core->publish(message);
             for (int i = 0; i < 11; i++)
@@ -548,7 +548,7 @@ private:
     //-------------------------------------------------------------------------
     void legacy_nav()
     {
-        publish_debug("Running Function: legacy_nav()");
+        publish_info("Running Function: legacy_nav()");
         publish_info("Begining Legacy point-to-point navigation");
         while (!(check_target()) && !canceled)
         {
@@ -570,7 +570,7 @@ private:
     //-------------------------------------------------------------------------
     void legacy_aruco_nav()
     {
-        publish_debug("Running Function: legacy_aruco_nav()");
+        publish_info("Running Function: legacy_aruco_nav()");
         publish_info("Begining Legacy AruCo navigation");
         while (!(check_macula_target()) && !canceled)
         {
@@ -590,7 +590,7 @@ private:
     //-------------------------------------------------------------------------
     void set_led(int color)
     {
-        publish_debug("Running Function: set_led()");
+        publish_info("Running Function: set_led()");
         auto command = std_msgs::msg::String();
         
         switch (color) {
@@ -627,10 +627,10 @@ private:
     //-------------------------------------------------------------------------
     void drive_meters(float meters)
     {
-        publish_debug("Running Function: drive_meters()");
+        publish_info("Running Function: drive_meters()");
         auto command = std_msgs::msg::String();
         std::string scommand = "driveMeters," + std::to_string(meters);
-        command.data = scommand.c_str();
+        command.data = scommand.c_str()+'\n';
 
         anchorWait = 1;
         while(anchorWait == 1)
@@ -640,7 +640,7 @@ private:
         }
         // Stop
         set_motors(0);
-        publish_debug("Went the distance");
+        publish_info("Went the distance");
     }
 
     
@@ -658,11 +658,11 @@ private:
     //-------------------------------------------------------------------------
     void refresh()
     {
-        publish_debug("Running Function: refresh()");
+        publish_info("Running Function: refresh()");
         confirm_core();
         set_bearing();
         set_distance_remaining();
-        publish_debug("Data refreshed!");
+        publish_info("Data refreshed!");
     }
 
     //-------------------------------------------------------------------------
@@ -672,11 +672,11 @@ private:
 
     void confirm_core()
     {
-        publish_debug("Running Function: confirm_core()");
-        publish_debug("Waiting for /core/feedback");
+        publish_info("Running Function: confirm_core()");
+        publish_info("Waiting for /core/feedback");
         coreWait = 1;
         while (coreWait);
-        publish_debug("Recieved /core/feedback");
+        publish_info("Recieved /core/feedback");
     }
 
     //-------------------------------------------------------------------------
@@ -686,7 +686,7 @@ private:
     //-------------------------------------------------------------------------
     bool check_target()
     {
-        publish_debug("Running Function: check_target()");
+        publish_info("Running Function: check_target()");
         confirm_core();
         if ((abs(current_lat - target_lat) <= 0.000018) && \
             ((abs(current_long - target_long) <= 0.000018)))
@@ -700,7 +700,7 @@ private:
 
     bool check_macula_target()
     {
-        publish_debug("Running Function: check_macula_target()");
+        publish_info("Running Function: check_macula_target()");
         confirm_core();
         if ((abs(current_lat - macula_lat) <= 0.000018) && \
             ((abs(current_long - macula_long) <= 0.000018)))
@@ -720,7 +720,7 @@ private:
     //-------------------------------------------------------------------------
     void set_bearing()
     {
-        publish_debug("Running Function: set_bearing()");
+        publish_info("Running Function: set_bearing()");
         double X, Y, neededHeading;
         double deltaLong = target_long - current_long;
         double deg2rad = (3.131592/180);
@@ -758,7 +758,7 @@ private:
     //-------------------------------------------------------------------------
     void set_distance_remaining()
     {
-        publish_debug("Running Function: set_distance_remaining()");
+        publish_info("Running Function: set_distance_remaining()");
         double deg2rad = (180.0/3.141592);
         double deltaLat = deg2rad * target_lat - current_lat;
         double deltaLong = deg2rad * target_long - current_long;
