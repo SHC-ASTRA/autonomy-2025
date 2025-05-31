@@ -542,9 +542,9 @@ private:
         for (int i = 0; i < 5; i++)
         {
             set_led(2);
-            usleep(1.1 * SECOND);
+            usleep(0.5 * SECOND);
             set_led(0);
-            usleep(1.1 * SECOND);
+            usleep(0.5 * SECOND);
         }
         set_led(2);
 
