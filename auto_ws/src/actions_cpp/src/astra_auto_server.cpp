@@ -633,6 +633,7 @@ private:
         do {
             publish_info(c_msg);
             publisher_core->publish(message);
+            refresh();
             for (int i = 0; i < 11; i++)
             {
                 confirm_core();
