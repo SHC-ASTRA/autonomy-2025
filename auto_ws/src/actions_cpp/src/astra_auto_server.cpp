@@ -137,17 +137,17 @@ private:
     {
         if (coreWait)
         {
-            RCLCPP_INFO(this->get_logger(), "Recieved Core Feedback!");
             coreWait = 0;
-            RCLCPP_INFO(this->get_logger(), "Recieved Orientation: '%f' ", current_heading);
-            RCLCPP_INFO(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
-            RCLCPP_INFO(this->get_logger(), "Recieved Longitude: '%f' ", current_long);
-            RCLCPP_INFO(this->get_logger(), "With '%d' satellites", sats);
+            current_heading = msg.orientation;
+            current_lat = msg.gps_lat;
+            current_long = msg.gps_long;
+            sats = msg.gps_sats;
+            RCLCPP_INFO(this->get_logger(), "Recieved Core Feedback!");
+            RCLCPP_DEBUG(this->get_logger(), "Recieved Orientation: '%f' ", current_heading);
+            RCLCPP_DEBUG(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
+            RCLCPP_DEBUG(this->get_logger(), "Recieved Longitude: '%f' ", current_long);
+            RCLCPP_DEBUG(this->get_logger(), "With '%d' satellites", sats);
         }
-        current_heading = msg.orientation;
-        current_lat = msg.gps_lat;
-        current_long = msg.gps_long;
-        sats = msg.gps_sats;
 
     }
 
@@ -397,18 +397,17 @@ private:
             // to blue, then to red, then turn to bearing target, then stop.
             //-----------------------------------------------------------------
             case 0: 
-                {
-                    usleep(4 * SECOND);
-                    set_led(2);
-                    usleep(4 * SECOND);
-                    set_led(3);
-                    usleep(4 * SECOND);
-                    set_led(1);
-                    // Update bearing and orient to it
-                    set_bearing();
-                    orient(target_bearing);
-                    result->final_result = 1;
-                }
+                usleep(1 * SECOND);
+                set_led(2);
+                usleep(1 * SECOND);
+                set_led(3);
+                usleep(1 * SECOND);
+                set_led(1);
+                // Update bearing and orient to it
+                confirm_core();
+                set_bearing();
+                orient(target_bearing);
+                result->final_result = 1;
                 break;
             //-----------------------------------------------------------------
             // Case 1: GNSS Legacy
@@ -581,22 +580,31 @@ private:
             publish_info("Going Forward!");
             message.left_stick = .7;
             message.right_stick = .7;
+            message.max_speed = 70;
+            message.brake = false;
+            message.turn_to_enable = false;
             publisher_core->publish(message);
         }
         // Go Backwards
         else if (state == 2)
         {
             publish_info("Going Backwards!");
-            message.left_stick = -0.7;
-            message.right_stick = -0.7;
+            message.left_stick = .7;
+            message.right_stick = .7;
+            message.max_speed = 70;
+            message.brake = false;
+            message.turn_to_enable = false;
             publisher_core->publish(message);
         }
         // Go forwards, slowly
         else if (state == 3)
         {
             publish_info("Going Forward Slowly!");
-            message.left_stick = .3;
-            message.right_stick = .3;
+            message.left_stick = .7;
+            message.right_stick = .7;
+            message.max_speed = 70;
+            message.brake = false;
+            message.turn_to_enable = false;
             publisher_core->publish(message);
         }
         // Warn, stop! Invalid input
@@ -605,6 +613,9 @@ private:
             publish_warn("Invalid motor state!");
             message.left_stick = 0;
             message.right_stick = 0;
+            message.max_speed = 70;
+            message.brake = false;
+            message.turn_to_enable = false;
             publisher_core->publish(message);
             publish_warn("Stopped motors, future behaviour may be undefined!");
         }
@@ -629,22 +640,23 @@ private:
         std::string msg = "Turning to face " + std::to_string(bearing); 
         const char * c_msg = msg.c_str();
         
-        
+       
         do {
             publish_info(c_msg);
             publisher_core->publish(message);
             refresh();
-            for (int i = 0; i < 11; i++)
-            {
-                confirm_core();
-                if (abs(current_heading - bearing) <= 2)
-                {
-                    publish_info("Proper Orientation Reached!");
-                    break;
-                }
-                usleep(SECOND);
-            }
-        } while (abs(current_heading - bearing) >= 2);
+            usleep(10 * SECOND);
+            // for (int i = 1; i < 11; i++)
+            // {
+            //     confirm_core();
+            //     if (abs(current_heading - bearing) <= 5)
+            //     {
+            //         publish_info("Proper Orientation Reached!");
+            //         break;
+            //     }
+            //     usleep(SECOND);
+            // }
+        } while (abs(current_heading - bearing) >= 5);
             
         
     }
@@ -662,11 +674,11 @@ private:
         {
             refresh();
             orient(target_bearing);
-            if (distance_remaining >= 20)
+            if (distance_remaining >= 15)
                 drive_time(10.0);
-            else if (distance_remaining >= 10)
+            else if (distance_remaining >= 6)
                 drive_time(5.0);
-            else if (distance_remaining >= 5)
+            else 
                 drive_time(1.0);
         }
     }
@@ -688,11 +700,11 @@ private:
                 break;
             set_search_box(state);
             refresh();
-            if (distance_remaining >= 20)
+            if (distance_remaining >= 15)
                 drive_time(10.0);
-            else if (distance_remaining >= 10)
+            else if (distance_remaining >= 6)
                 drive_time(5.0);
-            else if (distance_remaining >= 5)
+            else 
                 drive_time(1.0);
             
             if (check_target())
@@ -735,7 +747,7 @@ private:
                 drive_time(10.0);
             else if (distance_remaining >= 10)
                 drive_time(5.0);
-            else if (distance_remaining >= 5)
+            else 
                 drive_time(1.0);
             
             if (check_target())
@@ -795,6 +807,8 @@ private:
         publish_info("Running Function: set_led()");
         auto command = std_msgs::msg::String();
         
+
+
         switch (color) {
             case 0:
                 publish_info("Turning off LED");
