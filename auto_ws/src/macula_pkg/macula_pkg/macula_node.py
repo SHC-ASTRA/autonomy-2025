@@ -126,8 +126,8 @@ class MaculaNode(Node):
         
         # -------------------FOR TESTING-------------------
         frame = cv2.resize(image, (0, 0), fx=0.5, fy=0.5)
-        cv2.imshow("Aruco Detection", frame)
-        cv2.waitKey(1)
+        # cv2.imshow("Aruco Detection", frame)
+        # cv2.waitKey(1)
         
     def detect_objects(self):
         frame = self.frame
@@ -174,8 +174,8 @@ class MaculaNode(Node):
         
         # ----------------------FOR DEBUG----------------------
         frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
-        cv2.imshow("Object Detection", frame)
-        cv2.waitKey(1)
+        # cv2.imshow("Object Detection", frame)
+        # cv2.waitKey(1)
                 
     def destroy_node(self):
         if self.cap.isOpened():

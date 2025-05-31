@@ -451,7 +451,7 @@ private:
             //-----------------------------------------------------------------
             // Case 5: GNSS SLAM
             //-----------------------------------------------------------------
-            case 4:
+            case 5:
                 publish_info("Spinning up Legacy Bottle Detection!");
                 break;
             
@@ -459,7 +459,7 @@ private:
             //-----------------------------------------------------------------
             // Case 6: AruCo SLAM
             //-----------------------------------------------------------------
-            case 4:
+            case 6:
                 publish_info("Spinning up Legacy Bottle Detection!");
                 break;
             
@@ -467,7 +467,7 @@ private:
             //-----------------------------------------------------------------
             // Case 7: Hammer Detection SLAM
             //-----------------------------------------------------------------
-            case 4:
+            case 7:
                 publish_info("Spinning up Legacy Bottle Detection!");
                 break;
             
@@ -475,7 +475,7 @@ private:
             //-----------------------------------------------------------------
             // Case 8: Bottle Detection SLAM
             //-----------------------------------------------------------------
-            case 4:
+            case 8:
                 publish_info("Spinning up Legacy Bottle Detection!");
                 break;
             
@@ -632,16 +632,18 @@ private:
         
         do {
             publish_info(c_msg);
-
             publisher_core->publish(message);
             for (int i = 0; i < 11; i++)
             {
                 confirm_core();
                 if (abs(current_heading - bearing) <= 2)
+                {
+                    publish_info("Proper Orientation Reached!");
                     break;
+                }
                 usleep(SECOND);
             }
-        } while (abs(current_heading - bearing) <= 2);
+        } while (abs(current_heading - bearing) >= 2);
             
         
     }
