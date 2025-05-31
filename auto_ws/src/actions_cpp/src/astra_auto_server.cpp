@@ -50,8 +50,8 @@
 
 #define SECOND 1000000
 #define FOCAL_RATIO 673.333313
-#define HAMMER_RATIO 1
-#define BOTTLE_RATIO 1
+#define HAMMER_RATIO 0.004523
+#define BOTTLE_RATIO 0.002643
 
 //=============================================================================
 // Predeclarations
@@ -135,13 +135,13 @@ private:
     //=======================================================================//
     void core_callback(const ros2_interfaces_pkg::msg::CoreFeedback & msg) 
     {
+        current_heading = msg.orientation;
+        current_lat = msg.gps_lat;
+        current_long = msg.gps_long;
+        sats = msg.gps_sats;
         if (coreWait)
         {
             coreWait = 0;
-            current_heading = msg.orientation;
-            current_lat = msg.gps_lat;
-            current_long = msg.gps_long;
-            sats = msg.gps_sats;
             RCLCPP_INFO(this->get_logger(), "Recieved Core Feedback!");
             RCLCPP_DEBUG(this->get_logger(), "Recieved Orientation: '%f' ", current_heading);
             RCLCPP_DEBUG(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
@@ -445,6 +445,7 @@ private:
             //-----------------------------------------------------------------
             case 4:
                 publish_info("Spinning up Legacy Bottle Detection!");
+                legacy_obj_nav();
                 break;
             
             //-----------------------------------------------------------------
@@ -517,6 +518,11 @@ private:
                 while (!(hammerFound || bottleFound));
                 usleep(.5 * SECOND);
                 RCLCPP_INFO(this->get_logger(), "Found bounding box size: '%f'", bounding_box_ratio());
+                break;
+            case -4:
+                publish_info("Started mission -4");
+                while (!(hammerFound || bottleFound || arucoFound));
+                face_aruco();
             
         }
         if (goal_handle->is_canceling())
@@ -537,10 +543,10 @@ private:
         {
             set_led(2);
             usleep(1.1 * SECOND);
-            set_led(3);
+            set_led(0);
             usleep(1.1 * SECOND);
         }
-        set_led(0);
+        set_led(2);
 
     }
     
@@ -572,6 +578,9 @@ private:
             publish_info("Stopping motors!");
             message.left_stick = 0;
             message.right_stick = 0;
+            message.max_speed = 70;
+            message.brake = false;
+            message.turn_to_enable = false;
             publisher_core->publish(message);
         }
         // Go Forwards
@@ -632,31 +641,28 @@ private:
     void orient(float bearing)
     {
         publish_info("Running Function: orient()");
-        // Create and populate message and 
-        auto message = ros2_interfaces_pkg::msg::CoreControl();
+        ros2_interfaces_pkg::msg::CoreControl message;
         message.turn_to_enable = true;
         message.turn_to = bearing;
         message.turn_to_timeout = 10;
-        std::string msg = "Turning to face " + std::to_string(bearing); 
-        const char * c_msg = msg.c_str();
-        
-       
-        do {
-            publish_info(c_msg);
-            publisher_core->publish(message);
-            refresh();
-            usleep(10 * SECOND);
-            // for (int i = 1; i < 11; i++)
-            // {
-            //     confirm_core();
-            //     if (abs(current_heading - bearing) <= 5)
-            //     {
-            //         publish_info("Proper Orientation Reached!");
-            //         break;
-            //     }
-            //     usleep(SECOND);
-            // }
-        } while (abs(current_heading - bearing) >= 5);
+        std::string info_str = "Turning to face " + std::to_string(bearing);
+
+        rclcpp::Rate rate(10); // 10 Hz => 100 ms per iteration
+        int max_iters = 50;    // 50 * 100 ms => 5 seconds
+        while (rclcpp::ok() && max_iters--)
+        {
+        publish_info(info_str.c_str());
+        publisher_core->publish(message);
+
+        // Let callbacks run so current_heading can be updated by subscriber:
+        rclcpp::spin_some(this->get_node_base_interface());
+
+        if (std::abs(current_heading - bearing) < 5) {
+            publish_info("Orientation within tolerance");
+            return;
+        }
+        rate.sleep();
+  }
             
         
     }
@@ -670,16 +676,18 @@ private:
     {
         publish_info("Running Function: legacy_nav()");
         publish_info("Begining Legacy point-to-point navigation");
-        while (!(check_target()) && !canceled)
+        while (!(check_target()))
         {
             refresh();
             orient(target_bearing);
             if (distance_remaining >= 15)
                 drive_time(10.0);
             else if (distance_remaining >= 6)
-                drive_time(5.0);
-            else 
+                drive_time(4.0);
+            else if (distance_remaining >= 3)
                 drive_time(1.0);
+            else 
+                drive_time(0.5);
         }
     }
 
@@ -699,17 +707,26 @@ private:
             if (arucoFound)
                 break;
             set_search_box(state);
-            refresh();
-            if (distance_remaining >= 15)
-                drive_time(10.0);
-            else if (distance_remaining >= 6)
-                drive_time(5.0);
-            else 
-                drive_time(1.0);
             
-            if (check_target())
-                state++;
-            
+            while (!(check_target()) && !arucoFound)
+            {
+                refresh();
+                orient(target_bearing);
+                if (distance_remaining >= 15)
+                    drive_time(10.0);
+                else if (distance_remaining >= 6)
+                    drive_time(4.0);
+                else if (distance_remaining >= 3)
+                    drive_time(1.0);
+                else 
+                    drive_time(0.5);
+                if (check_target())
+                {
+                    state++;
+                    break;
+                }    
+                
+            }
 
         }
         face_aruco();
@@ -722,6 +739,7 @@ private:
             drive_time(1.5);
             // Reset flag to get new bearing
             arucoFound = 0;
+            holdMacula = 0;
 
         }
     }
@@ -742,27 +760,59 @@ private:
             if (hammerFound || bottleFound)
                 break;
             set_search_box(state);
-            refresh();
-            if (distance_remaining >= 20)
-                drive_time(10.0);
-            else if (distance_remaining >= 10)
-                drive_time(5.0);
-            else 
-                drive_time(1.0);
             
-            if (check_target())
-                state++;
+            while (!(check_target()) && !hammerFound && !bottleFound)
+            {
+                refresh();
+                orient(target_bearing);
+                if (distance_remaining >= 15)
+                    drive_time(10.0);
+                else if (distance_remaining >= 6)
+                    drive_time(4.0);
+                else if (distance_remaining >= 3)
+                    drive_time(1.0);
+                else 
+                    drive_time(0.5);
+                if (check_target())
+                {
+                    state++;
+                    break;
+                }    
+                
+            }
             
 
         }
 
         if (mission_type == 3)
         {
+            face_aruco();
+            while (bounding_box_ratio() < HAMMER_RATIO) 
+            {
+                refresh();
+                range_aruco();
+                orient(macula_heading);
+                drive_time(0.75);
+                // Reset flag to get new bearing
+                arucoFound = 0;
+                holdMacula = 0;
 
+            }
         }   
         else if (mission_type == 4)
         {
+            face_aruco();
+            while (bounding_box_ratio() < BOTTLE_RATIO)
+            {
+                refresh();
+                range_aruco();
+                orient(macula_heading);
+                drive_time(0.75);
+                // Reset flag to get new bearing
+                arucoFound = 0;
+                holdMacula = 0;
 
+            }
         } 
     }
 
@@ -846,7 +896,7 @@ private:
         publish_info("Running Function: drive_time()");
         set_distance_remaining();
         set_bearing();
-        if (distance_remaining < 10 || macula_range < 10)
+        if (distance_remaining < 5 || macula_range < 5)
         {
             set_motors(3);
             usleep(duration * SECOND);
@@ -936,8 +986,19 @@ private:
         publish_info("Running Function: confirm_core()");
         publish_info("Waiting for /core/feedback");
         coreWait = 1;
-        while (coreWait);
-        publish_info("Recieved /core/feedback");
+
+        // Wait up to, say, 500ms checking every 10ms:
+        rclcpp::Rate rate(100 /*Hz*/);
+        int max_tries = 50; // 50 * 10ms = 500ms total
+        while (coreWait && rclcpp::ok() && max_tries--) {
+            rclcpp::spin_some(this->get_node_base_interface());
+            rate.sleep();
+        }
+        if (coreWait) {
+            publish_warn("Timeout waiting for /core/feedback");
+        } else {
+            publish_info("Received /core/feedback");
+        }
     }
 
     //-------------------------------------------------------------------------
@@ -948,7 +1009,7 @@ private:
     bool check_target()
     {
         publish_info("Running Function: check_target()");
-        confirm_core();
+        // confirm_core();
         if ((abs(current_lat - target_lat) <= 0.000018) && \
             ((abs(current_long - target_long) <= 0.000018)))
         {
@@ -1171,39 +1232,40 @@ private:
         double offset_long = target_radius * (1/(111111 * std::cos(target_lat)));
 
         switch (stage) {
-            case (1):
+            case 1:
                 target_lat += offset_lat;
                 target_long -= offset_long;
                 break;
-            case (2):
+            case 2:
                 target_lat -= 2 * offset_lat;
                 target_long += 2 * offset_long;
                 break;
-            case (3):
+            case 3:
                 target_lat += 2 * offset_lat;
                 break;
-            case (4):
+            case 4:
                 target_lat -= 2 * offset_lat;
                 target_long -= 2 * offset_long;
                 break;
-            case (5):
+            case 5:
                 target_lat += offset_lat;
                 target_long += 2 * offset_long;
                 break;
-            case (6):
+            case 6:
                 target_lat -= offset_lat;
                 target_long -= offset_long;
                 break;
-            case (7):
+            case 7:
                 target_lat += offset_lat;
                 target_long -= offset_long;
                 break;
-            case (8):
+            case 8:
                 target_lat += offset_lat;
                 target_long += offset_long;
                 break;
-            case (0):
+            case 0:
                 target_lat -= offset_lat;
+                break;
             default:
                 publish_warn("In set_search_box in astra_auto_server.cpp, sent invalid stage!");
         }
