@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <algorithm>                        // Min
 #include <cmath>                            // sin, cos, tan2
+#include <utility>
 
 //Made by Daegan Brown for ASTRA
 // #include "pathfind.h"                       // My functions
@@ -139,15 +140,15 @@ private:
         current_lat = msg.gps_lat;
         current_long = msg.gps_long;
         sats = msg.gps_sats;
-        if (coreWait)
-        {
+        // if (coreWait)
+        // {
             coreWait = 0;
-            RCLCPP_INFO(this->get_logger(), "Recieved Core Feedback!");
+            // RCLCPP_INFO(this->get_logger(), "Recieved Core Feedback!");
             RCLCPP_DEBUG(this->get_logger(), "Recieved Orientation: '%f' ", current_heading);
             RCLCPP_DEBUG(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
             RCLCPP_DEBUG(this->get_logger(), "Recieved Longitude: '%f' ", current_long);
             RCLCPP_DEBUG(this->get_logger(), "With '%d' satellites", sats);
-        }
+        // }
 
     }
 
@@ -316,7 +317,7 @@ private:
         
         RCLCPP_INFO(this->get_logger(), "Recieved Goal");
         // Invalid mission types
-        if (goal->mission_type > 15 || goal->mission_type < -5)
+        if (goal->mission_type > 15 || goal->mission_type < -10)
         {   
             publish_info("Rejected Goal! Out of bounds!");
             return rclcpp_action::GoalResponse::REJECT;
@@ -523,6 +524,17 @@ private:
                 publish_info("Started mission -4");
                 while (!(hammerFound || bottleFound || arucoFound));
                 face_aruco();
+                break;
+            case -5:
+                publish_info("Started mission -5: Serial Orient");
+                refresh();
+                serial_orient(target_bearing);
+                break;
+            case -6:
+                publish_info("Started mission -6: Manual Orient");
+                refresh();
+                manual_orient(target_bearing);
+                break;
             
         }
         if (goal_handle->is_canceling())
@@ -647,24 +659,74 @@ private:
         message.turn_to_timeout = 10;
         std::string info_str = "Turning to face " + std::to_string(bearing);
 
-        rclcpp::Rate rate(10); // 10 Hz => 100 ms per iteration
-        int max_iters = 50;    // 50 * 100 ms => 5 seconds
-        while (rclcpp::ok() && max_iters--)
-        {
-        publish_info(info_str.c_str());
         publisher_core->publish(message);
+        usleep(10 * SECOND);
+        // rclcpp::Rate rate(10); // 10 Hz => 100 ms per iteration
+        // int max_iters = 50;    // 50 * 100 ms => 5 seconds
+        // while (rclcpp::ok() && max_iters--)
+        // {
+        // publish_info(info_str.c_str());
+        // publisher_core->publish(message);
 
-        // Let callbacks run so current_heading can be updated by subscriber:
-        rclcpp::spin_some(this->get_node_base_interface());
+        // // Let callbacks run so current_heading can be updated by subscriber:
+        // rclcpp::spin_some(this->get_node_base_interface());
 
-        if (std::abs(current_heading - bearing) < 5) {
-            publish_info("Orientation within tolerance");
-            return;
-        }
-        rate.sleep();
-  }
+        // if (std::abs(current_heading - bearing) < 5) {
+        //     publish_info("Orientation within tolerance");
+        //     return;
+        // }
+        // rate.sleep();
+        // }
             
         
+    }
+
+    // Old serial 
+    void serial_orient(float bearing)
+    {
+        publish_info("Running Function: serial_orient()");
+        auto command = std_msgs::msg::String();
+        std::string scommand = "auto,turningTo,10," + std::to_string(bearing);
+        command.data = scommand;
+        usleep(10 * SECOND);
+
+    }
+
+    // manual serial
+    void manual_orient(float bearing)
+    {
+        publish_info("Running Function: manual_orient()");
+
+        ros2_interfaces_pkg::msg::CoreControl message;
+        message.turn_to_enable = false;
+        message.turn_to = bearing;
+        message.turn_to_timeout = 10;
+        std::string info_str = "Turning to face " + std::to_string(bearing);
+        while (true)
+        {
+            refresh();
+            if (std::fabs(std::fmod(bearing - current_heading + 540.0, 360) - 180.0) <= 10.0)
+            {
+                publish_info("Reached orientation");
+                return;
+            }
+            else 
+            {
+                message.left_stick = 1.0;
+                message.right_stick = -1.0;
+                message.max_speed = 70;
+                publisher_core->publish(message);
+
+                usleep(2 * SECOND);
+                message.left_stick = 0.0;
+                message.right_stick = 0.0;
+                publisher_core->publish(message);
+            }
+
+        }
+
+        
+
     }
 
     //-------------------------------------------------------------------------
@@ -987,18 +1049,18 @@ private:
         publish_info("Waiting for /core/feedback");
         coreWait = 1;
 
-        // Wait up to, say, 500ms checking every 10ms:
-        rclcpp::Rate rate(100 /*Hz*/);
-        int max_tries = 50; // 50 * 10ms = 500ms total
-        while (coreWait && rclcpp::ok() && max_tries--) {
-            rclcpp::spin_some(this->get_node_base_interface());
-            rate.sleep();
-        }
-        if (coreWait) {
-            publish_warn("Timeout waiting for /core/feedback");
-        } else {
-            publish_info("Received /core/feedback");
-        }
+        // // Wait up to, say, 500ms checking every 10ms:
+        // rclcpp::Rate rate(100 /*Hz*/);
+        // int max_tries = 50; // 50 * 10ms = 500ms total
+        // while (coreWait && rclcpp::ok() && max_tries--) {
+        //     rclcpp::spin_some(this->get_node_base_interface());
+        //     rate.sleep();
+        // }
+        // if (coreWait) {
+        //     publish_warn("Timeout waiting for /core/feedback");
+        // } else {
+        //     publish_info("Received /core/feedback");
+        // }
     }
 
     //-------------------------------------------------------------------------
