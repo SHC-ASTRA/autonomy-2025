@@ -533,7 +533,7 @@ private:
             case -6:
                 publish_info("Started mission -6: Manual Orient");
                 refresh();
-                manual_orient(target_bearing);
+                // manual_orient(target_bearing);
                 break;
             
         }
@@ -599,9 +599,9 @@ private:
         else if (state == 1)
         {
             publish_info("Going Forward!");
-            message.left_stick = .7;
-            message.right_stick = .7;
-            message.max_speed = 70;
+            message.left_stick = 1;
+            message.right_stick = 1;
+            message.max_speed = 90;
             message.brake = false;
             message.turn_to_enable = false;
             publisher_core->publish(message);
@@ -653,19 +653,24 @@ private:
     void orient(float bearing)
     {
         publish_info("Running Function: orient()");
-        ros2_interfaces_pkg::msg::CoreControl message;
-        message.turn_to_enable = true;
-        message.turn_to = bearing;
-        message.turn_to_timeout = 10;
-        std::string info_str = "Turning to face " + std::to_string(bearing);
+        // ros2_interfaces_pkg::msg::CoreControl message;
+        // message.turn_to_enable = true;
+        // message.turn_to = bearing;
+        // message.turn_to_timeout = 10;
+        // std::string info_str = "Turning to face " + std::to_string(bearing);
 
-        publisher_core->publish(message);
+        std_msgs::msg::String balls = std_msgs::msg::String();
+        int direction = (int)bearing;
+        // balls.data = "\ncan_relay_tovic,core,41,350,1\n";
+        balls.data = "can_relay_tovic,core,41," + std::to_string(direction) + ",10\n";
+        publisher_anchor->publish(balls);
+        // publisher_core->publish(message);
         usleep(10 * SECOND);
         // rclcpp::Rate rate(10); // 10 Hz => 100 ms per iteration
         // int max_iters = 50;    // 50 * 100 ms => 5 seconds
         // while (rclcpp::ok() && max_iters--)
         // {
-        // publish_info(info_str.c_str());
+        // publish_info(info_str.c_str());+
         // publisher_core->publish(message);
 
         // // Let callbacks run so current_heading can be updated by subscriber:
@@ -693,41 +698,41 @@ private:
     }
 
     // manual serial
-    void manual_orient(float bearing)
-    {
-        publish_info("Running Function: manual_orient()");
+    // void manual_orient(float bearing)
+    // {
+    //     publish_info("Running Function: manual_orient()");
 
-        ros2_interfaces_pkg::msg::CoreControl message;
-        message.turn_to_enable = false;
-        message.turn_to = bearing;
-        message.turn_to_timeout = 10;
-        std::string info_str = "Turning to face " + std::to_string(bearing);
-        while (true)
-        {
-            refresh();
-            if (std::fabs(std::fmod(bearing - current_heading + 540.0, 360) - 180.0) <= 10.0)
-            {
-                publish_info("Reached orientation");
-                return;
-            }
-            else 
-            {
-                message.left_stick = 1.0;
-                message.right_stick = -1.0;
-                message.max_speed = 70;
-                publisher_core->publish(message);
+    //     ros2_interfaces_pkg::msg::CoreControl message;
+    //     message.turn_to_enable = false;
+    //     message.turn_to = bearing;
+    //     message.turn_to_timeout = 10;
+    //     std::string info_str = "Turning to face " + std::to_string(bearing);
+    //     while (true)
+    //     {
+    //         refresh();
+    //         if (std::fabs(std::fmod(bearing - current_heading + 540.0, 360) - 180.0) <= 10.0)
+    //         {
+    //             publish_info("Reached orientation");
+    //             return;
+    //         }
+    //         else 
+    //         {
+    //             message.left_stick = 1.0;
+    //             message.right_stick = -1.0;
+    //             message.max_speed = 70;
+    //             publisher_anchor->publish(message);
 
-                usleep(2 * SECOND);
-                message.left_stick = 0.0;
-                message.right_stick = 0.0;
-                publisher_core->publish(message);
-            }
+    //             usleep(2 * SECOND);
+    //             message.left_stick = 0.0;
+    //             message.right_stick = 0.0;
+    //             publisher_anchor->publish(message);
+    //         }
 
-        }
+    //     }
 
         
 
-    }
+    // }
 
     //-------------------------------------------------------------------------
     // Legacy Navigate
@@ -745,11 +750,11 @@ private:
             if (distance_remaining >= 15)
                 drive_time(10.0);
             else if (distance_remaining >= 6)
-                drive_time(4.0);
+                drive_time(6.0);
             else if (distance_remaining >= 3)
-                drive_time(1.0);
+                drive_time(3.0);
             else 
-                drive_time(0.5);
+                drive_time(2.0);
         }
     }
 
@@ -924,24 +929,24 @@ private:
         switch (color) {
             case 0:
                 publish_info("Turning off LED");
-                command.data = "led_set,0,0,0";
+                command.data = "led_set,0,0,0\n";
                 break;
             case 1:
                 publish_info("Turning LED red");
-                command.data = "led_set,255,0,0";
+                command.data = "led_set,255,0,0\n";
                 break;
             case 2:
                 publish_info("Turning LED Green");
-                command.data = "led_set,0,255,0";
+                command.data = "led_set,0,255,0\n";
                 break;
             case 3:
                 publish_info("Turning LED Blue");
-                command.data = "led_set,0,0,255";
+                command.data = "led_set,0,0,255\n";
                 break;
             default:
                 publish_info("Turning off LED");
                 publish_warn("Recieved unknown LED command. Turning off LED and proceeding");
-                command.data = "led_set,0,0,0";
+                command.data = "led_set,0,0,0\n";
             break;
             
         }
@@ -958,18 +963,18 @@ private:
         publish_info("Running Function: drive_time()");
         set_distance_remaining();
         set_bearing();
-        if (distance_remaining < 5 || macula_range < 5)
-        {
+        // if (distance_remaining < 5 || macula_range < 5)
+        // {
             set_motors(3);
             usleep(duration * SECOND);
             set_motors(0);
-        }
-        else 
-        {
-            set_motors(1);
-            usleep(duration * SECOND);
-            set_motors(0);
-        }
+        // }
+        // else 
+        // {
+            // set_motors(1);
+            // usleep(duration * SECOND);
+            // set_motors(0);
+        // }
 
     }
 
