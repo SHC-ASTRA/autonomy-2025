@@ -20,6 +20,11 @@ def generate_launch_description():
         default_value="1", # Default to ArUco detection
         description="Set detection type: 1 for ArUco, 2 for Object"
     )
+    declare_mode = DeclareLaunchArgument(
+        "confidence",
+        default_value="0.5", # Default to 50%
+        description="Set confidence threshold for YOLO object detection"
+    )
 
     return LaunchDescription([
         declare_arg,

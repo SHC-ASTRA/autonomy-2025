@@ -59,8 +59,8 @@ class MaculaNode(Node):
         self.model = YOLO("./src/macula_pkg/models/best.pt") 
         
         # Get object detection threshold from parameter
-        self.declare_parameter("confidence_threshold", 0.5)
-        self.threshold = self.get_parameter("confidence_threshold").get_parameter_value().double_value
+        self.declare_parameter("confidence", 0.5)
+        self.threshold = self.get_parameter("confidence").get_parameter_value().double_value
         
         self.timer = self.create_timer(0.1, self.frame_mode)  # Timer to run at 10 Hz
         
