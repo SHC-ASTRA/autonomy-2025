@@ -965,8 +965,18 @@ private:
         set_bearing();
         // if (distance_remaining < 5 || macula_range < 5)
         // {
-            set_motors(3);
-            usleep(duration * SECOND);
+            // Account for safety timeout
+            if (duration > 1) {
+                for (int i = 0; i < std::floor(duration); i++) {
+                    set_motors(3);
+                    usleep(1 * SECOND);
+                }
+            }
+            // Run the decimal point time (e.g., if duration == 1.5, already ran for 1 seconds, now run for 0.5 secs)
+            if (duration % 1 != 0) {
+                set_motors(3);
+                usleep((duration - std::floor(duration)) * SECOND);
+            }
             set_motors(0);
         // }
         // else 
