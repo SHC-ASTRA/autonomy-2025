@@ -973,7 +973,7 @@ private:
                 }
             }
             // Run the decimal point time (e.g., if duration == 1.5, already ran for 1 seconds, now run for 0.5 secs)
-            if (duration % 1 != 0) {
+            if (duration == (int)duration) {
                 set_motors(3);
                 usleep((duration - std::floor(duration)) * SECOND);
             }
