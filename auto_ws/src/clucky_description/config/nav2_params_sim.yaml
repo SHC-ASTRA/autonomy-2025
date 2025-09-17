@@ -1,0 +1,94 @@
+amcl:  # Not used with RTAB-Map, but harmless
+  ros__parameters:
+    use_sim_time: true
+
+map_server:
+  ros__parameters:
+    use_sim_time: true
+    topic_name: /map
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 5.0
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+
+controller_server:
+  ros__parameters:
+    controller_plugins: ["FollowPath"]
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      min_vel_x: -1.0  # reverse allowed
+      max_vel_x: 1.0
+      min_speed_xy: 0.05
+      max_speed_xy: 1.0
+      acc_lim_x: 0.25
+      decel_lim_x: 0.25
+      vx_samples: 20
+      sim_time: 1.0
+      linear_granularity: 0.05
+      angular_granularity: 0.05
+      max_rotational_vel: 1.0
+      min_rotational_vel: 0.1
+      max_vel_theta: 1.0
+      min_vel_theta: -1.0
+      acc_lim_theta: 1.0
+      decel_lim_theta: 1.0
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: true
+    default_bt_xml_filename: "navigate_w_replanning_and_recovery.xml"
+
+global_costmap:
+  ros__parameters:
+    global_frame: map
+    robot_base_frame: base_link
+    update_frequency: 2.0
+    publish_frequency: 2.0
+    footprint: "[[-0.595, -0.4825], [-0.595, 0.4825], [0.595, 0.4825], [0.595, -0.4825]]"
+    resolution: 0.05
+    plugins: ["obstacle_layer", "inflation_layer"]
+
+    obstacle_layer:
+      plugin: "nav2_costmap_2d::ObstacleLayer"
+      observation_sources: depth
+      depth:
+        topic: /DEBUG/POINTCLOUDTOPIC
+        sensor_frame: camera_link
+        data_type: PointCloud2
+        clearing: true
+        marking: true
+        obstacle_range: 3.0
+        raytrace_range: 4.0
+
+    inflation_layer:
+      plugin: "nav2_costmap_2d::InflationLayer"
+      inflation_radius: 0.5
+
+local_costmap:
+  ros__parameters:
+    global_frame: odom
+    robot_base_frame: base_link
+    update_frequency: 5.0
+    publish_frequency: 2.0
+    footprint: "[[-0.595, -0.4825], [-0.595, 0.4825], [0.595, 0.4825], [0.595, -0.4825]]"
+    resolution: 0.05
+    plugins: ["obstacle_layer", "inflation_layer"]
+
+    obstacle_layer:
+      plugin: "nav2_costmap_2d::ObstacleLayer"
+      observation_sources: depth
+      depth:
+        topic: /DEBUG/POINTCLOUDTOPIC
+        sensor_frame: camera_link
+        data_type: PointCloud2
+        clearing: true
+        marking: true
+        obstacle_range: 3.0
+        raytrace_range: 4.0
+
+    inflation_layer:
+      plugin: "nav2_costmap_2d::InflationLayer"
+      inflation_radius: 0.5

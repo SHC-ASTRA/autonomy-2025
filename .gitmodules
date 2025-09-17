@@ -1,0 +1,15 @@
+[submodule "auto_ws/src/ros2_interfaces_pkg"]
+	path = auto_ws/src/ros2_interfaces_pkg
+	url = git@github.com:SHC-ASTRA/ros2_interfaces_pkg.git
+	branch = auto
+[submodule "auto_ws/src/rtabmap"]
+	path = auto_ws/src/rtabmap
+	url = https://github.com/introlab/rtabmap.git
+[submodule "auto_ws/src/rtabmap_ros"]
+	path = auto_ws/src/rtabmap_ros
+	url = https://github.com/introlab/rtabmap_ros.git
+	branch = ros2
+[submodule "auto_ws/src/realsense-ros"]
+	path = auto_ws/src/realsense-ros
+	url = https://github.com/IntelRealSense/realsense-ros.git
+	branch = ros2-master
