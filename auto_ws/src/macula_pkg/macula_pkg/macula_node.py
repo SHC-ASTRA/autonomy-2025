@@ -3,7 +3,7 @@
 # ROS2
 import rclpy
 from rclpy.node import Node
-from ros2_interfaces_pkg import msg
+from astra_msgs import msg
 
 # OpenCV
 import cv2

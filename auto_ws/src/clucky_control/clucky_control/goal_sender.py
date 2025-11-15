@@ -3,7 +3,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose
-from ros2_interfaces_pkg import msg as my_msg
+from astra_msgs import msg as my_msg
 
 
 class GoalSender(Node):

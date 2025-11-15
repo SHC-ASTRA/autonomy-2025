@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from ros2_interfaces_pkg import msg
+from astra_msgs import msg
 
 class CmdVelBridge(Node):
     def __init__(self):

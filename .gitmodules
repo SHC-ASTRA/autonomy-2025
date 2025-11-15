@@ -1,6 +1,6 @@
-[submodule "auto_ws/src/ros2_interfaces_pkg"]
-	path = auto_ws/src/ros2_interfaces_pkg
-	url = git@github.com:SHC-ASTRA/ros2_interfaces_pkg.git
+[submodule "auto_ws/src/astra_msgs"]
+	path = auto_ws/src/astra_msgs
+	url = git@github.com:SHC-ASTRA/astra_msgs.git
 	branch = auto
 [submodule "auto_ws/src/rtabmap"]
 	path = auto_ws/src/rtabmap
