@@ -38,12 +38,12 @@
 // #include <opencv2/calib3d.hpp>                  //
 
 // ROS2 Interfaces
-#include "ros2_interfaces_pkg/action/auto_command.hpp"
-#include "ros2_interfaces_pkg/msg/core_feedback.hpp"
-#include "ros2_interfaces_pkg/msg/core_control.hpp"
-#include "ros2_interfaces_pkg/msg/auto_feedback.hpp"
-#include "ros2_interfaces_pkg/msg/auto_nav.hpp" 
-#include "ros2_interfaces_pkg/msg/macula_feedback.hpp"
+#include "astra_msgs/action/auto_command.hpp"
+#include "astra_msgs/msg/core_feedback.hpp"
+#include "astra_msgs/msg/core_control.hpp"
+#include "astra_msgs/msg/auto_feedback.hpp"
+#include "astra_msgs/msg/auto_nav.hpp" 
+#include "astra_msgs/msg/macula_feedback.hpp"
 
 //=============================================================================
 // Definitions
@@ -60,7 +60,7 @@
 
 
 //Shorthands and other such things
-using NavigateRover = ros2_interfaces_pkg::action::AutoCommand;
+using NavigateRover = astra_msgs::action::AutoCommand;
 using NavigateRoverGoalHandle = rclcpp_action::ServerGoalHandle<NavigateRover>;
 using namespace std::placeholders;
 
@@ -116,11 +116,11 @@ public:
     
     NavigateRoverSubscriberNode() : Node("navigate_rover_subscriber")
     {
-        subscriber_core_ = this->create_subscription<ros2_interfaces_pkg::msg::CoreFeedback>(
+        subscriber_core_ = this->create_subscription<astra_msgs::msg::CoreFeedback>(
             "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::core_callback, this, _1));
         subscriber_anchor_ = this->create_subscription<std_msgs::msg::String>(
             "/anchor/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::anchor_callback, this, _1));
-        subscriber_macula_ = this->create_subscription<ros2_interfaces_pkg::msg::MaculaFeedback>(
+        subscriber_macula_ = this->create_subscription<astra_msgs::msg::MaculaFeedback>(
             "/auto/macula", 10, std::bind(&NavigateRoverSubscriberNode::macula_callback, this, _1));
         subscriber_nav_ = this->create_subscription<nav_msgs::msg::Path>(
             "local_plan", 10, std::bind(&NavigateRoverSubscriberNode::plan_callback, this, _1));
@@ -134,7 +134,7 @@ private:
     //=======================================================================//
     //= Subscriber Topic Callback                                           =//
     //=======================================================================//
-    void core_callback(const ros2_interfaces_pkg::msg::CoreFeedback & msg) 
+    void core_callback(const astra_msgs::msg::CoreFeedback & msg) 
     {
         current_heading = msg.orientation;
         current_lat = msg.gps_lat;
@@ -162,7 +162,7 @@ private:
         }
     }
 
-    void macula_callback(const ros2_interfaces_pkg::msg::MaculaFeedback & msg)
+    void macula_callback(const astra_msgs::msg::MaculaFeedback & msg)
     {
         if (!msg.detected || holdMacula == 1)
         {
@@ -236,8 +236,8 @@ private:
     // int object_id;
     // float x0, x1, x2, x3, y0, y1, y2, y3;
 
-    rclcpp::Subscription<ros2_interfaces_pkg::msg::CoreFeedback>::SharedPtr subscriber_core_;
-    rclcpp::Subscription<ros2_interfaces_pkg::msg::MaculaFeedback>::SharedPtr subscriber_macula_;
+    rclcpp::Subscription<astra_msgs::msg::CoreFeedback>::SharedPtr subscriber_core_;
+    rclcpp::Subscription<astra_msgs::msg::MaculaFeedback>::SharedPtr subscriber_macula_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscriber_anchor_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr subscriber_nav_;
 
@@ -269,7 +269,7 @@ public:
         RCLCPP_INFO(this->get_logger(), "Action server has been started");
         
         // Publisher for Core Control
-        publisher_core = this->create_publisher<ros2_interfaces_pkg::msg::CoreControl>(
+        publisher_core = this->create_publisher<astra_msgs::msg::CoreControl>(
             "/core/control", 10);
 
         // Publisher to send information directly to anchor
@@ -277,7 +277,7 @@ public:
             "/anchor/relay", 10);
         
         // Publisher to contact Nav2
-        publisher_nav = this->create_publisher<ros2_interfaces_pkg::msg::AutoNav>(
+        publisher_nav = this->create_publisher<astra_msgs::msg::AutoNav>(
             "/auto/nav", 10);
         
     }
@@ -582,7 +582,7 @@ private:
     void set_motors(int state)
     {
         publish_info("Running Function: set_motors()");
-        auto message = ros2_interfaces_pkg::msg::CoreControl();
+        auto message = astra_msgs::msg::CoreControl();
 
         // Stop
         if (state == 0)
@@ -653,7 +653,7 @@ private:
     void orient(float bearing)
     {
         publish_info("Running Function: orient()");
-        // ros2_interfaces_pkg::msg::CoreControl message;
+        // astra_msgs::msg::CoreControl message;
         // message.turn_to_enable = true;
         // message.turn_to = bearing;
         // message.turn_to_timeout = 10;
@@ -702,7 +702,7 @@ private:
     // {
     //     publish_info("Running Function: manual_orient()");
 
-    //     ros2_interfaces_pkg::msg::CoreControl message;
+    //     astra_msgs::msg::CoreControl message;
     //     message.turn_to_enable = false;
     //     message.turn_to = bearing;
     //     message.turn_to_timeout = 10;
@@ -1415,8 +1415,8 @@ private:
     //= ROS2 Declarations                                                   =//
     //=======================================================================//
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_anchor;
-    rclcpp::Publisher<ros2_interfaces_pkg::msg::CoreControl>::SharedPtr publisher_core;
-    rclcpp::Publisher<ros2_interfaces_pkg::msg::AutoNav>::SharedPtr publisher_nav;
+    rclcpp::Publisher<astra_msgs::msg::CoreControl>::SharedPtr publisher_core;
+    rclcpp::Publisher<astra_msgs::msg::AutoNav>::SharedPtr publisher_nav;
     size_t count_;
     rclcpp_action::Server<NavigateRover>::SharedPtr navigate_rover_server_;
     rclcpp::CallbackGroup::SharedPtr cb_group_;

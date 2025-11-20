@@ -14,7 +14,7 @@
 
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
-  <depend>ros2_interfaces_pkg</depend>
+  <depend>astra_msgs</depend>
   <depend>python3-ultralytics</depend>
 
 

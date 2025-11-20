@@ -18,7 +18,7 @@
   
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
-  <depend>ros2_interfaces_pkg</depend>
+  <depend>astra_msgs</depend>
   <depend>rclcpp_action</depend>
   <depend>image_transport</depend>
   <depend>realsense2_camera</depend>

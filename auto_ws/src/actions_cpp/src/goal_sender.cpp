@@ -12,15 +12,15 @@
 // ROS2 Comms
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
-#include "ros2_interfaces_pkg/action/auto_command.hpp"
-#include "ros2_interfaces_pkg/msg/core_feedback.hpp"
-#include "ros2_interfaces_pkg/msg/auto_feedback.hpp"
+#include "astra_msgs/action/auto_command.hpp"
+#include "astra_msgs/msg/core_feedback.hpp"
+#include "astra_msgs/msg/auto_feedback.hpp"
 
 //=============================================================================
 // Namespaces
 //=============================================================================
 
-using AutoCommand = ros2_interfaces_pkg::action::AutoCommand;
+using AutoCommand = astra_msgs::action::AutoCommand;
 using AutoCommandGoalHandle = rclcpp_action::ClientGoalHandle<AutoCommand>;
 using namespace std::placeholders;
 

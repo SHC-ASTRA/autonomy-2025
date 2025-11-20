@@ -13,15 +13,15 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 // #include "astra_auto_interfaces/action/navigate_rover.hpp"
-#include "ros2_interfaces_pkg/action/auto_command.hpp"
-#include "ros2_interfaces_pkg/msg/core_feedback.hpp"
-#include "ros2_interfaces_pkg/msg/auto_feedback.hpp"
+#include "astra_msgs/action/auto_command.hpp"
+#include "astra_msgs/msg/core_feedback.hpp"
+#include "astra_msgs/msg/auto_feedback.hpp"
 
 //=============================================================================
 // Namespaces
 //=============================================================================
 
-using NavigateRover = ros2_interfaces_pkg::action::AutoCommand;
+using NavigateRover = astra_msgs::action::AutoCommand;
 using NavigateRoverGoalHandle = rclcpp_action::ClientGoalHandle<NavigateRover>;
 using namespace std::placeholders;
 
