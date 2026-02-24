@@ -652,7 +652,7 @@ private:
         publish_info("Running Function: set_bearing()");
         double X, Y, neededHeading;
         double deltaLong = target_long - current_long;
-        double deg2rad = (3.131592/180);
+        double deg2rad = (3.141592/180);
         double rad2deg = (180/3.141592);
         int i_neededHeading;
 
@@ -688,7 +688,7 @@ private:
     void set_distance_remaining()
     {
         publish_info("Running Function: set_distance_remaining()");
-        double deg2rad = (180.0/3.141592);
+        double deg2rad = (3.141592/180);
         double deltaLat = deg2rad * target_lat - current_lat;
         double deltaLong = deg2rad * target_long - current_long;
         double a;
