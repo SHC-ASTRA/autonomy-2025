@@ -34,12 +34,13 @@ ament_target_dependencies(navigate_rover_client rclcpp rclcpp_action astra_msgs)
 add_executable(goal src/goal_sender.cpp)
 ament_target_dependencies(goal rclcpp rclcpp_action std_msgs astra_msgs)
 
-
+add_executable(navigation src/simple_server.cpp)
 
 install(TARGETS 
   navigate_rover_server
   navigate_rover_client
   goal
+  navigation
   
   DESTINATION lib/${PROJECT_NAME}/
 )

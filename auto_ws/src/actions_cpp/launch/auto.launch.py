@@ -15,7 +15,7 @@ def generate_launch_description():
         # Action Server Node
         Node(
             package='actions_cpp',
-            executable='navigate_rover_server',
+            executable='navigation',
             name='auto_server',
             output='screen'
         ),
