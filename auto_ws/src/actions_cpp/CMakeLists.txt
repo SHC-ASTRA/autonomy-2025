@@ -35,7 +35,7 @@ add_executable(goal src/goal_sender.cpp)
 ament_target_dependencies(goal rclcpp rclcpp_action std_msgs astra_msgs)
 
 add_executable(navigation src/simple_server.cpp)
-ament_target_dependencies(rclcpp rclcpp_action std_msgs astra_msgs)
+ament_target_dependencies(navigation rclcpp rclcpp_action std_msgs astra_msgs)
 
 install(TARGETS 
   navigate_rover_server
