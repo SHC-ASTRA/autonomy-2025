@@ -110,8 +110,8 @@ public:
             "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::core_callback, this, _1));
         subscriber_anchor_ = this->create_subscription<std_msgs::msg::String>(
             "/anchor/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::anchor_callback, this, _1));
-        subscriber_macula_ = this->create_subscription<astra_msgs::msg::MaculaFeedback>(
-            "/auto/macula", 10, std::bind(&NavigateRoverSubscriberNode::macula_callback, this, _1));
+        // subscriber_macula_ = this->create_subscription<astra_msgs::msg::MaculaFeedback>(
+        //     "/auto/macula", 10, std::bind(&NavigateRoverSubscriberNode::macula_callback, this, _1));
         
         
         
