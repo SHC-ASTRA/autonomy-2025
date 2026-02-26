@@ -582,7 +582,7 @@ private:
             // Account for safety timeout
             if (duration > 1) {
                 for (int i = 0; i < std::floor(duration); i++) {
-                    set_motors(1);
+                    set_motors(3);
                     usleep(1 * SECOND);
                 }
             }
