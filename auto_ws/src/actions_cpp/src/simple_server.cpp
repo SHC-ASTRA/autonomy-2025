@@ -486,6 +486,8 @@ private:
         // }
         // rate.sleep();
         // }
+        std::string scommand = "Orienting to: " + std::to_string(bearing);
+        publish_info(scommand);
             
         
     }
