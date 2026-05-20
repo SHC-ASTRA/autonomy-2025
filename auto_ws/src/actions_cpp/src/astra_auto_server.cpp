@@ -1,41 +1,24 @@
 //=============================================================================
 //rover-Autonomy Server
 //runs commands from the client
-//Last edited May 27, 2025
-//Version: 2.0
+//Last edited May 19, 2026
+//Version: 3.0
 //=============================================================================
 //INCLUDES
 //=============================================================================
 
 //C++ includes, normal
 #include <memory>                           // 
-#include <chrono>                           // 
 #include <functional>                       // 
 #include <string>                           // String type variable
 #include <unistd.h>                         // usleep 
-#include <stdio.h>
 #include <algorithm>                        // Min
 #include <cmath>                            // sin, cos, tan2
-#include <utility>
-
-//Made by Daegan Brown for ASTRA
-// #include "pathfind.h"                       // My functions
 
 //ROS2 includes
 #include "rclcpp/rclcpp.hpp"                // General ROS2 stuff 
 #include "rclcpp_action/rclcpp_action.hpp"  // ROS2 actions info
-#include "rclcpp/subscription_options.hpp"  // ROS2 subsriber info
 #include "std_msgs/msg/string.hpp"          // Message type for ROS2
-#include "nav_msgs/msg/path.hpp"
-
-//openCV shenanigans
-// #include <opencv2/opencv.hpp>                   //
-// #include <opencv2/core.hpp>                     //
-// #include <opencv2/aruco.hpp>                    //
-// #include <opencv2/videoio.hpp>                  //
-// #include <opencv2/highgui.hpp>                  //
-// #include <opencv2/objdetect/aruco_detector.hpp> //
-// #include <opencv2/calib3d.hpp>                  //
 
 // ROS2 Interfaces
 #include "astra_msgs/action/auto_command.hpp"
@@ -67,8 +50,6 @@ using namespace std::placeholders;
 
 //Global Variables
 double imu_bearing;                    
-std::string gps_string;
-bool cancel_request = false;
 
 // Feedback
 double current_heading;
@@ -81,27 +62,14 @@ double macula_heading;
 double macula_lat;
 double macula_long;
 double macula_range;
-int object_id;
 float x0_c, x1_c, x2_c, x3_c, y0_c, y1_c, y2_c, y3_c;
 
-
-// Nav
-double nav_x, nav_y, nav_z;
-
-
-
 // Flags
-bool canceled = 0;
 bool coreWait = 1;                  // Is it waiting on /core/feedback?
-bool anchorWait = 0;                // Is it waiting on /anchor/core/feedback?
 bool arucoFound = 0;
 bool hammerFound = 0;
 bool bottleFound = 0;
-bool navFail = 1;
 bool holdMacula = 0;
-bool navHold = 0;
-
-
 
 
 //===========================================================================//
@@ -118,17 +86,8 @@ public:
     {
         subscriber_core_ = this->create_subscription<astra_msgs::msg::CoreFeedback>(
             "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::core_callback, this, _1));
-        subscriber_anchor_ = this->create_subscription<std_msgs::msg::String>(
-            "/anchor/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::anchor_callback, this, _1));
         subscriber_macula_ = this->create_subscription<astra_msgs::msg::MaculaFeedback>(
             "/auto/macula", 10, std::bind(&NavigateRoverSubscriberNode::macula_callback, this, _1));
-        subscriber_nav_ = this->create_subscription<nav_msgs::msg::Path>(
-            "local_plan", 10, std::bind(&NavigateRoverSubscriberNode::plan_callback, this, _1));
-        
-        
-        
-        
-
     }
 private:
     //=======================================================================//
@@ -140,47 +99,29 @@ private:
         current_lat = msg.gps_lat;
         current_long = msg.gps_long;
         sats = msg.gps_sats;
-        // if (coreWait)
-        // {
-            coreWait = 0;
-            // RCLCPP_INFO(this->get_logger(), "Recieved Core Feedback!");
-            RCLCPP_DEBUG(this->get_logger(), "Recieved Orientation: '%f' ", current_heading);
-            RCLCPP_DEBUG(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
-            RCLCPP_DEBUG(this->get_logger(), "Recieved Longitude: '%f' ", current_long);
-            RCLCPP_DEBUG(this->get_logger(), "With '%d' satellites", sats);
-        // }
 
-    }
+        coreWait = 0;
+        
+        RCLCPP_DEBUG(this->get_logger(), "Recieved Orientation: '%f' ", current_heading);
+        RCLCPP_DEBUG(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
+        RCLCPP_DEBUG(this->get_logger(), "Recieved Longitude: '%f' ", current_long);
+        RCLCPP_DEBUG(this->get_logger(), "With '%d' satellites", sats);
 
-    void anchor_callback(const std_msgs::msg::String & msg)
-    {
-        if (anchorWait == 0 || holdMacula)
-            return;
-        if (msg.data == "can_relay_fromvic,core,drivemeters_done")
-        {
-            anchorWait = 0;
-        }
     }
 
     void macula_callback(const astra_msgs::msg::MaculaFeedback & msg)
     {
-        if (!msg.detected || holdMacula == 1)
-        {
-            // if (holdMacula == 0)
-            // {
-            //     hammerFound = 0;
-            //     bottleFound = 0;
-            //     arucoFound = 0;
-            // }
-            return;
-        }    
+        // if (!msg.detected || holdMacula == 1)
+        // {
+        //     return;
+        // }    
         RCLCPP_INFO(this->get_logger(), "Spotted target in frame");
 
 
         // Detect What
         if (msg.object_id == 51)
         {
-            RCLCPP_INFO(this->get_logger(), "Hammer Detected!");
+            RCLCPP_INFO(this->get_logger(), "Mallet Detected!");
             hammerFound = 1;
 
         }
@@ -189,6 +130,11 @@ private:
             RCLCPP_INFO(this->get_logger(), "Water Bottle Detected!");
             bottleFound = 1;
         }
+        else if (msg.object_id == 53)
+        {
+            RCLCPP_INFO(this->get_logger(), "Hammer Detected!");
+            hammerFound = 1;
+        }
         else 
         {
             RCLCPP_INFO(this->get_logger(), "AruCo Tag number '%d' detected", msg.object_id);
@@ -196,8 +142,6 @@ private:
         }
         
         // Save data
-        // detected = msg.detected;
-        object_id = msg.object_id;
         x0_c = msg.x0;
         x1_c = msg.x1;
         x2_c = msg.x2;
@@ -211,40 +155,13 @@ private:
         holdMacula = 1;
     }
 
-    void plan_callback(const nav_msgs::msg::Path::SharedPtr msg)
-    {
-        if (!navHold)
-        {
-            const auto & first_pose = msg->poses[0].pose;
-            nav_x = first_pose.position.x;
-            nav_y = first_pose.position.y;
-            nav_z = first_pose.position.z;
-
-            RCLCPP_INFO(get_logger(),
-              "Next waypoint → x: %.3f, y: %.3f, z: %.3f",
-              nav_x, nav_y, nav_z);
-
-            // navhold = 1
-        }
-    }
-
-
-    //=======================================================================//
-    //= Internal Variables                                                  =//
-    //=======================================================================//
-    // bool detected;
-    // int object_id;
-    // float x0, x1, x2, x3, y0, y1, y2, y3;
-
     rclcpp::Subscription<astra_msgs::msg::CoreFeedback>::SharedPtr subscriber_core_;
     rclcpp::Subscription<astra_msgs::msg::MaculaFeedback>::SharedPtr subscriber_macula_;
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscriber_anchor_;
-    rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr subscriber_nav_;
 
 };
 
 //===========================================================================//
-//= ROS2 Server Node                                                         =//
+// ROS2 Server Node                                                          //
 //===========================================================================//
 // Node for the action server
 class NavigateRoverServerNode : public rclcpp::Node 
@@ -253,7 +170,7 @@ public:
     //=======================================================================//
     //= Constructor                                                         =//
     //=======================================================================//
-    NavigateRoverServerNode() : Node("navigate_rover_server"), count_(0) 
+    NavigateRoverServerNode() : Node("navigate_rover_server") 
     {
         cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
         //Creating action
@@ -270,15 +187,11 @@ public:
         
         // Publisher for Core Control
         publisher_core = this->create_publisher<astra_msgs::msg::CoreControl>(
-            "/core/control", 10);
+            "/core/control/cmd_vel", 10);
 
         // Publisher to send information directly to anchor
         publisher_anchor = this->create_publisher<std_msgs::msg::String>(
             "/anchor/relay", 10);
-        
-        // Publisher to contact Nav2
-        publisher_nav = this->create_publisher<astra_msgs::msg::AutoNav>(
-            "/auto/nav", 10);
         
     }
     
@@ -296,9 +209,6 @@ private:
     // Derived info 
     float target_bearing;
     float distance_remaining;
-
-
-
 
     //=======================================================================//
     //= ROS2 Action Standard Functions                                      =//
@@ -339,7 +249,6 @@ private:
 
         // Feedback
         publish_info("Recieved Goal Cancel Request but WONT FUCKIN DO IT");
-        cancel_request = true;
         
         return rclcpp_action::CancelResponse::ACCEPT;
     }
@@ -370,11 +279,8 @@ private:
         const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
     {
         // Create result variable
-        int t_result;
+        int t_result = 0;
         auto result = std::make_shared<NavigateRover::Result>();
-
-        // Set rate
-        rclcpp::Rate loop_rate(1.0/period);
 
         // Set LED to RED
         set_led(1);                         // Red
@@ -562,15 +468,11 @@ private:
 
     }
     
-    
-    
     //=======================================================================//
     //= Direct Rover Control Commands                                       =//
     //=======================================================================//
     // These functions directly control the rover, either through 
     // /core/control or through /anchor/relay
-
-
 
     //-------------------------------------------------------------------------
     // Set motors
@@ -653,12 +555,7 @@ private:
     void orient(float bearing)
     {
         publish_info("Running Function: orient()");
-        // astra_msgs::msg::CoreControl message;
-        // message.turn_to_enable = true;
-        // message.turn_to = bearing;
-        // message.turn_to_timeout = 10;
-        // std::string info_str = "Turning to face " + std::to_string(bearing);
-
+        
         std_msgs::msg::String balls = std_msgs::msg::String();
         int direction = (int)bearing;
         // balls.data = "\ncan_relay_tovic,core,41,350,1\n";
@@ -666,24 +563,7 @@ private:
         publisher_anchor->publish(balls);
         // publisher_core->publish(message);
         usleep(10 * SECOND);
-        // rclcpp::Rate rate(10); // 10 Hz => 100 ms per iteration
-        // int max_iters = 50;    // 50 * 100 ms => 5 seconds
-        // while (rclcpp::ok() && max_iters--)
-        // {
-        // publish_info(info_str.c_str());+
-        // publisher_core->publish(message);
-
-        // // Let callbacks run so current_heading can be updated by subscriber:
-        // rclcpp::spin_some(this->get_node_base_interface());
-
-        // if (std::abs(current_heading - bearing) < 5) {
-        //     publish_info("Orientation within tolerance");
-        //     return;
-        // }
-        // rate.sleep();
-        // }
-            
-        
+     
     }
 
     // Old serial 
@@ -696,43 +576,6 @@ private:
         usleep(10 * SECOND);
 
     }
-
-    // manual serial
-    // void manual_orient(float bearing)
-    // {
-    //     publish_info("Running Function: manual_orient()");
-
-    //     astra_msgs::msg::CoreControl message;
-    //     message.turn_to_enable = false;
-    //     message.turn_to = bearing;
-    //     message.turn_to_timeout = 10;
-    //     std::string info_str = "Turning to face " + std::to_string(bearing);
-    //     while (true)
-    //     {
-    //         refresh();
-    //         if (std::fabs(std::fmod(bearing - current_heading + 540.0, 360) - 180.0) <= 10.0)
-    //         {
-    //             publish_info("Reached orientation");
-    //             return;
-    //         }
-    //         else 
-    //         {
-    //             message.left_stick = 1.0;
-    //             message.right_stick = -1.0;
-    //             message.max_speed = 70;
-    //             publisher_anchor->publish(message);
-
-    //             usleep(2 * SECOND);
-    //             message.left_stick = 0.0;
-    //             message.right_stick = 0.0;
-    //             publisher_anchor->publish(message);
-    //         }
-
-    //     }
-
-        
-
-    // }
 
     //-------------------------------------------------------------------------
     // Legacy Navigate
@@ -798,7 +641,7 @@ private:
         }
         face_aruco();
 
-        while (!(check_macula_target()) && !canceled)
+        while (!(check_macula_target()))
         {
             refresh();
             range_aruco();
@@ -988,51 +831,6 @@ private:
 
     }
 
-    //-------------------------------------------------------------------------
-    // Drive Meters
-    // This function sends to /anchro/relay a command to drive the rover
-    // x meters forward (backwards if negative)
-    //-------------------------------------------------------------------------
-    //#########################################################################
-    // WARNING
-    // The embedded side of this has not been tested
-    // Might do nothing
-    //#########################################################################
-    void drive_meters(float meters)
-    {
-        publish_info("Running Function: drive_meters()");
-        auto command = std_msgs::msg::String();
-        std::string scommand = "driveMeters," + std::to_string(meters);
-        command.data = scommand.c_str()+'\n';
-
-        anchorWait = 1;
-        while(anchorWait == 1)
-        {
-            usleep(0.25 * SECOND);
-            publisher_anchor->publish(command);
-        }
-        // Stop
-        set_motors(0);
-        publish_info("Went the distance");
-    }
-
-    //-------------------------------------------------------------------------
-    // Approach Object
-    // Using bounding box, get close to object until required ratio is met
-    //-------------------------------------------------------------------------
-    void approach_object(float ratio)
-    {
-        refresh();
-        face_aruco();
-        holdMacula = 0;
-        while (bounding_box_ratio() < ratio)
-        {
-            drive_time(1.0);
-            holdMacula = 0;
-            usleep(0.2 * SECOND);
-        }
-    }
-
     //=======================================================================//
     //= Refresh Functions                                                   =//
     //=======================================================================//
@@ -1063,19 +861,6 @@ private:
         publish_info("Running Function: confirm_core()");
         publish_info("Waiting for /core/feedback");
         coreWait = 1;
-
-        // // Wait up to, say, 500ms checking every 10ms:
-        // rclcpp::Rate rate(100 /*Hz*/);
-        // int max_tries = 50; // 50 * 10ms = 500ms total
-        // while (coreWait && rclcpp::ok() && max_tries--) {
-        //     rclcpp::spin_some(this->get_node_base_interface());
-        //     rate.sleep();
-        // }
-        // if (coreWait) {
-        //     publish_warn("Timeout waiting for /core/feedback");
-        // } else {
-        //     publish_info("Received /core/feedback");
-        // }
     }
 
     //-------------------------------------------------------------------------
@@ -1189,36 +974,22 @@ private:
     {
         publish_info("Starting Function: range_aruco()");
 
-        int midpoint, pog_checker;
-        float pixelHeight, actualHeight, pixelWidth, actualWidth, distanceFromW = 0,
-            range, lastRange;
+        float pixelWidth, actualWidth, distanceFromW = 0, range;
         double x_offset, y_offset;
         double lat_offset, long_offset;
-        double need_heading;
         // Focal Ratio is camera dependent.
         // For URC 2024 cam: 475.488
         // For IP cam: 
         // float focalRatio = 475.488;
         float theta;
         double deg2rad = (3.141592/180);
-        double rad2deg = (180/3.141592);
         
         refresh();
-        midpoint = (abs(x0_c - x1_c));
-        need_heading = current_heading + ((320 - midpoint) * -0.046875);
 
-
-        pixelHeight = y3_c - y0_c;
-        actualHeight = 0.15;
         pixelWidth = x1_c - x0_c;
         actualWidth = 0.15;
         distanceFromW = (FOCAL_RATIO/pixelWidth) * actualWidth;
         range = distanceFromW;
-        float estAttempts = range/2.5;
-
-        // get rid of weird stderr output
-        (void)pog_checker;(void)pixelHeight;(void)actualHeight;(void)lastRange;
-        (void)need_heading;(void)rad2deg;(void)estAttempts;
         
         theta = current_heading;
         if (theta > 90 && theta < 180)
@@ -1262,27 +1033,9 @@ private:
     {
         publish_info("Starting Function: calibrate_camera()");
 
-        float midpoint, pog_checker;
-        float pixelHeight, actualHeight, pixelWidth, actualWidth, distanceFromW = 0,
-            range, lastRange;
-        double x_offset, y_offset;
-        double lat_offset, long_offset;
-        double need_heading;
-        // Focal Ratio is camera dependent.
-        // For URC 2024 cam: 475.488
-        // For IP cam: 
-        // float focalRatio = 475.488;
-        float theta;
-        double deg2rad = (3.141592/180);
-        double rad2deg = (180/3.141592);
+        float pixelWidth, actualWidth;
         
         refresh();
-        midpoint = (abs(x0_c - x1_c));
-        need_heading = current_heading + ((320 - midpoint) * -0.046875);
-
-
-        pixelHeight = y3_c - y0_c;
-        actualHeight = 0.15;
         pixelWidth = x1_c - x0_c;
         actualWidth = 0.15;
 
@@ -1350,20 +1103,6 @@ private:
     }
     
     //-------------------------------------------------------------------------
-    // Reset Targets
-    // Sets GPS targets back to parameters
-    //-------------------------------------------------------------------------
-    void reset_target(
-        const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
-    {
-        publish_debug("Running Function: reset_target()");
-        publish_info("Resetting target GPS to mission target!");
-        target_lat = goal_handle->get_goal()->gps_lat_target;
-        target_long = goal_handle->get_goal()->gps_long_target;
-
-    }
-
-    //-------------------------------------------------------------------------
     // Finds Bounding box ratio
     //-------------------------------------------------------------------------
     float bounding_box_ratio()
@@ -1402,22 +1141,12 @@ private:
     {
         RCLCPP_WARN(this->get_logger(), msg);
     }
-    void publish_error(const char * msg)
-    {
-        RCLCPP_ERROR(this->get_logger(), msg);
-    }
-    void publish_fatal(const char * msg)
-    {
-        RCLCPP_FATAL(this->get_logger(), msg);
-    }
 
     //=======================================================================//
     //= ROS2 Declarations                                                   =//
     //=======================================================================//
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_anchor;
     rclcpp::Publisher<astra_msgs::msg::CoreControl>::SharedPtr publisher_core;
-    rclcpp::Publisher<astra_msgs::msg::AutoNav>::SharedPtr publisher_nav;
-    size_t count_;
     rclcpp_action::Server<NavigateRover>::SharedPtr navigate_rover_server_;
     rclcpp::CallbackGroup::SharedPtr cb_group_;
 };
@@ -1427,17 +1156,6 @@ private:
 //====================================================================================
 int main(int argc, char **argv)
 {
-    // //Generates AruCo tags
-    // cv::Mat markerImage;
-    // cv::aruco::Dictionary dictionary1 = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
-    // cv::aruco::generateImageMarker(dictionary1, 1, 200, markerImage, 1);
-    // cv::imwrite("marker2.png", markerImage);
-
-    //Camera stuff for OpenCV
-    
-
-
-
     rclcpp::init(argc, argv);
     auto node1 = std::make_shared<NavigateRoverServerNode>(); 
     auto node2 = std::make_shared<NavigateRoverSubscriberNode>();
