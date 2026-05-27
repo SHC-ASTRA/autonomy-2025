@@ -26,6 +26,7 @@
 #include "rclcpp_action/rclcpp_action.hpp"  // ROS2 actions info
 #include "rclcpp/subscription_options.hpp"  // ROS2 subsriber info
 #include "std_msgs/msg/string.hpp"          // Message type for ROS2
+#include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/path.hpp"
 
 //openCV shenanigans
@@ -40,7 +41,6 @@
 // ROS2 Interfaces
 #include "astra_msgs/action/auto_command.hpp"
 #include "astra_msgs/msg/core_feedback.hpp"
-#include "astra_msgs/msg/core_control.hpp"
 #include "astra_msgs/msg/auto_feedback.hpp"
 #include "astra_msgs/msg/auto_nav.hpp" 
 #include "astra_msgs/msg/macula_feedback.hpp"
@@ -269,8 +269,8 @@ public:
         RCLCPP_INFO(this->get_logger(), "Action server has been started");
         
         // Publisher for Core Control
-        publisher_core = this->create_publisher<astra_msgs::msg::CoreControl>(
-            "/core/control", 10);
+        publisher_core = this->create_publisher<geometry_msgs::msg::Twist>(
+            "/core/cmd_vel", 10);
 
         // Publisher to send information directly to anchor
         publisher_anchor = this->create_publisher<std_msgs::msg::String>(
@@ -582,63 +582,45 @@ private:
     void set_motors(int state)
     {
         publish_info("Running Function: set_motors()");
-        auto message = astra_msgs::msg::CoreControl();
+        auto message = geometry_msgs::msg::Twist();
 
         // Stop
         if (state == 0)
         {
             publish_info("Stopping motors!");
-            message.left_stick = 0;
-            message.right_stick = 0;
-            message.max_speed = 70;
-            message.brake = false;
-            message.turn_to_enable = false;
+            message.linear.x = 0;
+            message.angular.z = 0;
             publisher_core->publish(message);
         }
         // Go Forwards
         else if (state == 1)
         {
             publish_info("Going Forward!");
-            message.left_stick = 1;
-            message.right_stick = 1;
-            message.max_speed = 90;
-            message.brake = false;
-            message.turn_to_enable = false;
+            message.linear.x = 1;
+            message.angular.z = 0;
             publisher_core->publish(message);
         }
         // Go Backwards
         else if (state == 2)
         {
             publish_info("Going Backwards!");
-            message.left_stick = .7;
-            message.right_stick = .7;
-            message.max_speed = 70;
-            message.brake = false;
-            message.turn_to_enable = false;
+            message.linear.x = -1;
+            message.angular.z = 0;
             publisher_core->publish(message);
         }
         // Go forwards, slowly
         else if (state == 3)
         {
             publish_info("Going Forward Slowly!");
-            message.left_stick = .7;
-            message.right_stick = .7;
-            message.max_speed = 70;
-            message.brake = false;
-            message.turn_to_enable = false;
+            message.linear.x = 0.5;
+            message.angular.z = 0;
             publisher_core->publish(message);
         }
         // Warn, stop! Invalid input
         else 
         {
-            publish_warn("Invalid motor state!");
-            message.left_stick = 0;
-            message.right_stick = 0;
-            message.max_speed = 70;
-            message.brake = false;
-            message.turn_to_enable = false;
-            publisher_core->publish(message);
-            publish_warn("Stopped motors, future behaviour may be undefined!");
+            publish_warn("Invalid motor state! Stopping motors.");
+            set_motors(0);
         }
 
 
@@ -1415,7 +1397,7 @@ private:
     //= ROS2 Declarations                                                   =//
     //=======================================================================//
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_anchor;
-    rclcpp::Publisher<astra_msgs::msg::CoreControl>::SharedPtr publisher_core;
+    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher_core;
     rclcpp::Publisher<astra_msgs::msg::AutoNav>::SharedPtr publisher_nav;
     size_t count_;
     rclcpp_action::Server<NavigateRover>::SharedPtr navigate_rover_server_;
