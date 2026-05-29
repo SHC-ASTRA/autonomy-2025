@@ -100,10 +100,28 @@ bool arucoFound = 0;
 bool hammerFound = 0;
 bool bottleFound = 0;
 bool navFail = 1;
-bool holdMacula = 0;
 bool navHold = 0;
 
+double normalize_360(double angle)
+{
+    if (angle < 0.0)
+        angle += 360.0;
 
+    if (angle >= 360.0)
+        angle -= 360.0;
+
+    return angle;
+}
+
+double normalize_angle_deg(double angle)
+{
+    angle = normalize_360(angle);
+
+    if (angle > 180.0) 
+        angle -= 360.0;
+    
+    return angle;
+}
 
 
 //===========================================================================//
@@ -176,12 +194,17 @@ private:
 
         current_heading = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)) * 180 / M_PI;
 
+        current_heading = normalize_360(current_heading);
+
+        if (current_heading < 0.0)
+            current_heading += 360.0;
+
         RCLCPP_DEBUG(this->get_logger(), "Recieved IMU Bearing: '%f' ", current_heading);
     }
 
     void anchor_callback(const std_msgs::msg::String & msg)
     {
-        if (anchorWait == 0 || holdMacula)
+        if (anchorWait == 0)
             return;
         if (msg.data == "can_relay_fromvic,core,drivemeters_done")
         {
@@ -198,7 +221,6 @@ private:
             hammerFound = 0;
             bottleFound = 0;
             arucoFound = 0;
-            holdMacula == 0;
             // }
             return;
         }    
@@ -234,9 +256,6 @@ private:
         y1_c = msg.y1;
         y2_c = msg.y2;
         y3_c = msg.y3;
-
-        // Hold until cleared by server
-        holdMacula = 1;
     }
 
     void plan_callback(const nav_msgs::msg::Path::SharedPtr msg)
@@ -524,7 +543,7 @@ private:
                 publish_info("Started mission -1");
                 for (int i = 0; i < 5; i++)
                 {
-                    while (holdMacula == 0);
+                    // while (holdMacula == 0);
                     range_aruco();
                     RCLCPP_INFO(this->get_logger(), "Found Macula Range: '%f'", macula_range);
                     RCLCPP_INFO(this->get_logger(), "Found Macula Lat: '%f'", macula_lat);
@@ -539,7 +558,7 @@ private:
             //-----------------------------------------------------------------
             case -2:
                 publish_info("Started mission -2");
-                while (!holdMacula);
+                // while (!holdMacula);
                 calibrate_camera();
                 t_result = 0;
                 break;
@@ -605,13 +624,6 @@ private:
     double rad_to_deg(double rad)
     {
         return rad * 180.0 / M_PI;
-    }
-    
-    double normalize_angle_deg(double angle)
-    {
-        while (angle > 180.0) angle -= 360.0;
-        while (angle < -180.0) angle += 360.0;
-        return angle;
     }
 
     double clamp(double value, double min_value, double max_value)
@@ -1151,12 +1163,14 @@ private:
                 stop_rover();
                 return true;
             }
+            target_bearing = normalize_360(target_bearing);
+            current_heading = normalize_360(current_heading);
 
             double heading_error = normalize_angle_deg(target_bearing - current_heading);
 
             double angular = 0.0;
             if (std::abs(heading_error) > 8.0) {
-                angular =clamp(-0.01 * heading_error, -0.25, 0.25); 
+                angular = clamp(-0.01 * heading_error, -0.25, 0.25); 
             }
 
             double linear = 0.3;
