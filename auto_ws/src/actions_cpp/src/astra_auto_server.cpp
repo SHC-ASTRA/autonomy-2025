@@ -164,13 +164,14 @@ private:
 
     void macula_callback(const astra_msgs::msg::MaculaFeedback & msg)
     {
-        if (!msg.detected || holdMacula == 1)
+        if (!msg.detected)
         {
-            // if (holdMacula == 0)
+            // if ()
             // {
-            //     hammerFound = 0;
-            //     bottleFound = 0;
-            //     arucoFound = 0;
+            hammerFound = 0;
+            bottleFound = 0;
+            arucoFound = 0;
+            holdMacula == 0;
             // }
             return;
         }    
@@ -270,7 +271,7 @@ public:
         
         // Publisher for Core Control
         publisher_core = this->create_publisher<geometry_msgs::msg::Twist>(
-            "/core/cmd_vel", 10);
+            "/core/control/cmd_vel", 10);
 
         // Publisher to send information directly to anchor
         publisher_anchor = this->create_publisher<std_msgs::msg::String>(
@@ -339,6 +340,7 @@ private:
 
         // Feedback
         publish_info("Recieved Goal Cancel Request but WONT FUCKIN DO IT");
+        stop_rover();
         cancel_request = true;
         
         return rclcpp_action::CancelResponse::ACCEPT;
@@ -370,7 +372,7 @@ private:
         const std::shared_ptr<NavigateRoverGoalHandle> goal_handle)
     {
         // Create result variable
-        int t_result;
+        int t_result = 0;
         auto result = std::make_shared<NavigateRover::Result>();
 
         // Set rate
@@ -397,19 +399,19 @@ private:
             // Rover will wait 4 seconds, change LED to green, wait 4 seconds, 
             // to blue, then to red, then turn to bearing target, then stop.
             //-----------------------------------------------------------------
-            case 0: 
-                usleep(1 * SECOND);
-                set_led(2);
-                usleep(1 * SECOND);
-                set_led(3);
-                usleep(1 * SECOND);
-                set_led(1);
-                // Update bearing and orient to it
-                confirm_core();
-                set_bearing();
-                orient(target_bearing);
-                result->final_result = 1;
-                break;
+            // case 0: 
+            //     usleep(1 * SECOND);
+            //     set_led(2);
+            //     usleep(1 * SECOND);
+            //     set_led(3);
+            //     usleep(1 * SECOND);
+            //     set_led(1);
+            //     // Update bearing and orient to it
+            //     confirm_core();
+            //     set_bearing();
+            //     orient(target_bearing);
+            //     result->final_result = 1;
+            //     break;
             //-----------------------------------------------------------------
             // Case 1: GNSS Legacy
             // Rover will point to target, drive forward 3 seconds, then 
@@ -418,6 +420,8 @@ private:
             case 1: 
                 publish_info("Spinning up Legacy Nav");
                 legacy_nav();
+                t_result = 1;
+                stop_rover();
                 break;
             
             //-----------------------------------------------------------------
@@ -520,16 +524,16 @@ private:
                 usleep(.5 * SECOND);
                 RCLCPP_INFO(this->get_logger(), "Found bounding box size: '%f'", bounding_box_ratio());
                 break;
-            case -4:
-                publish_info("Started mission -4");
-                while (!(hammerFound || bottleFound || arucoFound));
-                face_aruco();
-                break;
-            case -5:
-                publish_info("Started mission -5: Serial Orient");
-                refresh();
-                serial_orient(target_bearing);
-                break;
+            // case -4:
+            //     publish_info("Started mission -4");
+            //     while (!(hammerFound || bottleFound || arucoFound));
+            //     face_aruco();
+            //     break;
+            // case -5:
+            //     publish_info("Started mission -5: Serial Orient");
+            //     refresh();
+            //     serial_orient(target_bearing);
+            //     break;
             case -6:
                 publish_info("Started mission -6: Manual Orient");
                 refresh();
@@ -551,17 +555,40 @@ private:
         publish_info("Goal Succeeded!");
 
         // Set LED to blink green
+        rclcpp::Rate blink_rate(2);
+
         for (int i = 0; i < 5; i++)
         {
             set_led(2);
-            usleep(0.5 * SECOND);
+            blink_rate.sleep();
             set_led(0);
-            usleep(0.5 * SECOND);
+            blink_rate.sleep();
         }
         set_led(2);
 
     }
+
+    double deg_to_rad(double deg)
+    {
+        return deg * M_PI / 180.0;
+    }
+
+    double rad_to_deg(double rad)
+    {
+        return rad * 180.0 / M_PI;
+    }
     
+    double normalize_angle_deg(double angle)
+    {
+        while (angle > 180.0) angle -= 360.0;
+        while (angle < -180.0) angle += 360.0;
+        return angle;
+    }
+
+    double clamp(double value, double min_value, double max_value)
+    {
+        return std::max(min_value, std::min(value, max_value));
+    }
     
     
     //=======================================================================//
@@ -626,58 +653,95 @@ private:
 
     }
 
+    void publish_cmd_vel(float linear_x, float angular_z)
+    {
+        geometry_msgs::msg::Twist cmd;
+        cmd.linear.x = linear_x;
+        cmd.angular.z = angular_z;
+        publisher_core->publish(cmd);
+    }
+
+    void stop_rover()
+    {
+        publish_cmd_vel(0.0, 0.0);
+    }
+
     //-------------------------------------------------------------------------
     // Orient To
     // Input a bearing, and the function will continue until the rover is 
     // within 2 degree of that target bearing
     //-------------------------------------------------------------------------
     
-    void orient(float bearing)
-    {
-        publish_info("Running Function: orient()");
-        // astra_msgs::msg::CoreControl message;
-        // message.turn_to_enable = true;
-        // message.turn_to = bearing;
-        // message.turn_to_timeout = 10;
-        // std::string info_str = "Turning to face " + std::to_string(bearing);
+    // void orient(float bearing)
+    // {
+    //     publish_info("Running Function: orient()");
+    //     // astra_msgs::msg::CoreControl message;
+    //     // message.turn_to_enable = true;
+    //     // message.turn_to = bearing;
+    //     // message.turn_to_timeout = 10;
+    //     // std::string info_str = "Turning to face " + std::to_string(bearing);
 
-        std_msgs::msg::String balls = std_msgs::msg::String();
-        int direction = (int)bearing;
-        // balls.data = "\ncan_relay_tovic,core,41,350,1\n";
-        balls.data = "can_relay_tovic,core,41," + std::to_string(direction) + ",10\n";
-        publisher_anchor->publish(balls);
-        // publisher_core->publish(message);
-        usleep(10 * SECOND);
-        // rclcpp::Rate rate(10); // 10 Hz => 100 ms per iteration
-        // int max_iters = 50;    // 50 * 100 ms => 5 seconds
-        // while (rclcpp::ok() && max_iters--)
-        // {
-        // publish_info(info_str.c_str());+
-        // publisher_core->publish(message);
+    //     std_msgs::msg::String balls = std_msgs::msg::String();
+    //     int direction = (int)bearing;
+    //     // balls.data = "\ncan_relay_tovic,core,41,350,1\n";
+    //     balls.data = "can_relay_tovic,core,41," + std::to_string(direction) + ",10\n";
+    //     publisher_anchor->publish(balls);
+    //     // publisher_core->publish(message);
+    //     usleep(10 * SECOND);
+    //     // rclcpp::Rate rate(10); // 10 Hz => 100 ms per iteration
+    //     // int max_iters = 50;    // 50 * 100 ms => 5 seconds
+    //     // while (rclcpp::ok() && max_iters--)
+    //     // {
+    //     // publish_info(info_str.c_str());+
+    //     // publisher_core->publish(message);
 
-        // // Let callbacks run so current_heading can be updated by subscriber:
-        // rclcpp::spin_some(this->get_node_base_interface());
+    //     // // Let callbacks run so current_heading can be updated by subscriber:
+    //     // rclcpp::spin_some(this->get_node_base_interface());
 
-        // if (std::abs(current_heading - bearing) < 5) {
-        //     publish_info("Orientation within tolerance");
-        //     return;
-        // }
-        // rate.sleep();
-        // }
+    //     // if (std::abs(current_heading - bearing) < 5) {
+    //     //     publish_info("Orientation within tolerance");
+    //     //     return;
+    //     // }
+    //     // rate.sleep();
+    //     // }
             
         
+    // }
+
+    bool turn_to_bearing(double bearing, double tolerance_deg = 5.0)
+    {
+        rclcpp::Rate rate(10);
+
+        while (rclcpp::ok() && !cancel_request)
+        {
+            double error = normalize_angle_deg(bearing - current_heading);
+
+            if (std::abs(error) <= tolerance_deg)
+            {
+                stop_rover();
+                return true;
+            }
+
+            double angular = clamp(0.03 * error, -0.6, 0.6);
+            publish_cmd_vel(0.0, angular);
+
+            rate.sleep();
+        }
+
+        stop_rover();
+        return false;
     }
 
     // Old serial 
-    void serial_orient(float bearing)
-    {
-        publish_info("Running Function: serial_orient()");
-        auto command = std_msgs::msg::String();
-        std::string scommand = "auto,turningTo,10," + std::to_string(bearing);
-        command.data = scommand;
-        usleep(10 * SECOND);
+    // void serial_orient(float bearing)
+    // {
+    //     publish_info("Running Function: serial_orient()");
+    //     auto command = std_msgs::msg::String();
+    //     std::string scommand = "auto,turningTo,10," + std::to_string(bearing);
+    //     command.data = scommand;
+    //     usleep(10 * SECOND);
 
-    }
+    // }
 
     // manual serial
     // void manual_orient(float bearing)
@@ -723,21 +787,25 @@ private:
     //-------------------------------------------------------------------------
     void legacy_nav()
     {
-        publish_info("Running Function: legacy_nav()");
-        publish_info("Begining Legacy point-to-point navigation");
-        while (!(check_target()))
-        {
-            refresh();
-            orient(target_bearing);
-            if (distance_remaining >= 15)
-                drive_time(10.0);
-            else if (distance_remaining >= 6)
-                drive_time(6.0);
-            else if (distance_remaining >= 3)
-                drive_time(3.0);
-            else 
-                drive_time(2.0);
-        }
+        // publish_info("Running Function: legacy_nav()");
+        // publish_info("Begining Legacy point-to-point navigation");
+        // while (!(check_target()))
+        // {
+        //     refresh();
+        //     orient(target_bearing);
+        //     if (distance_remaining >= 15)
+        //         drive_time(10.0);
+        //     else if (distance_remaining >= 6)
+        //         drive_time(6.0);
+        //     else if (distance_remaining >= 3)
+        //         drive_time(3.0);
+        //     else 
+        //         drive_time(2.0);
+        // }
+
+        publish_info("Starting GPS navigation");
+        navigate_to_current_target(target_radius);
+        stop_rover();
     }
 
     //-------------------------------------------------------------------------
@@ -747,50 +815,70 @@ private:
     //-------------------------------------------------------------------------
     void legacy_aruco_nav()
     {
-        publish_info("Running Function: legacy_aruco_nav()");
-        publish_info("Begining Legacy AruCo navigation");
-        int state = 1;
-        for (state = 1; state <= 8; state++)
-        {
-            // Check flag for spotted tag
-            if (arucoFound)
-                break;
-            set_search_box(state);
+        // publish_info("Running Function: legacy_aruco_nav()");
+        // publish_info("Begining Legacy AruCo navigation");
+        // int state = 1;
+        // for (state = 1; state <= 8; state++)
+        // {
+        //     // Check flag for spotted tag
+        //     if (arucoFound)
+        //         break;
+        //     set_search_box(state);
             
-            while (!(check_target()) && !arucoFound)
-            {
-                refresh();
-                orient(target_bearing);
-                if (distance_remaining >= 15)
-                    drive_time(10.0);
-                else if (distance_remaining >= 6)
-                    drive_time(4.0);
-                else if (distance_remaining >= 3)
-                    drive_time(1.0);
-                else 
-                    drive_time(0.5);
-                if (check_target())
-                {
-                    state++;
-                    break;
-                }    
+        //     while (!(check_target()) && !arucoFound)
+        //     {
+        //         refresh();
+        //         orient(target_bearing);
+        //         if (distance_remaining >= 15)
+        //             drive_time(10.0);
+        //         else if (distance_remaining >= 6)
+        //             drive_time(4.0);
+        //         else if (distance_remaining >= 3)
+        //             drive_time(1.0);
+        //         else 
+        //             drive_time(0.5);
+        //         if (check_target())
+        //         {
+        //             state++;
+        //             break;
+        //         }    
                 
-            }
+        //     }
 
-        }
-        face_aruco();
+        // }
+        // face_aruco();
 
-        while (!(check_macula_target()) && !canceled)
+        // while (!(check_macula_target()) && !canceled)
+        // {
+        //     refresh();
+        //     range_aruco();
+        //     orient(macula_heading);
+        //     drive_time(1.5);
+        //     // Reset flag to get new bearing
+        //     arucoFound = 0;
+        //     holdMacula = 0;
+
+        // }
+
+        publish_info("Navigating to ArUco search area");
+
+        double search_radius = clamp(target_radius, 5.0, 20.0);
+
+        navigate_to_current_target(search_radius);
+        stop_rover();
+
+        publish_info("Searching for ArUco");
+
+        if (!search_for_target(2))
         {
-            refresh();
-            range_aruco();
-            orient(macula_heading);
-            drive_time(1.5);
-            // Reset flag to get new bearing
-            arucoFound = 0;
-            holdMacula = 0;
-
+            stop_rover();
+            return;
         }
+
+        publish_info("Approaching ArUco");
+
+        approach_detected_target(0.015);
+        stop_rover();
     }
 
     //-------------------------------------------------------------------------
@@ -800,97 +888,148 @@ private:
     //-------------------------------------------------------------------------
     void legacy_obj_nav()
     {
-        publish_debug("Running Function: legacy_obj_nav()");
+        // publish_debug("Running Function: legacy_obj_nav()");
 
-        int state = 1;
-        for (state = 1; state <= 8; state++)
-        {
-            // Check flag for spotted tag
-            if (hammerFound || bottleFound)
-                break;
-            set_search_box(state);
+        // int state = 1;
+        // for (state = 1; state <= 8; state++)
+        // {
+        //     // Check flag for spotted tag
+        //     if (hammerFound || bottleFound)
+        //         break;
+        //     set_search_box(state);
             
-            while (!(check_target()) && !hammerFound && !bottleFound)
-            {
-                refresh();
-                orient(target_bearing);
-                if (distance_remaining >= 15)
-                    drive_time(10.0);
-                else if (distance_remaining >= 6)
-                    drive_time(4.0);
-                else if (distance_remaining >= 3)
-                    drive_time(1.0);
-                else 
-                    drive_time(0.5);
-                if (check_target())
-                {
-                    state++;
-                    break;
-                }    
+        //     while (!(check_target()) && !hammerFound && !bottleFound)
+        //     {
+        //         refresh();
+        //         orient(target_bearing);
+        //         if (distance_remaining >= 15)
+        //             drive_time(10.0);
+        //         else if (distance_remaining >= 6)
+        //             drive_time(4.0);
+        //         else if (distance_remaining >= 3)
+        //             drive_time(1.0);
+        //         else 
+        //             drive_time(0.5);
+        //         if (check_target())
+        //         {
+        //             state++;
+        //             break;
+        //         }    
                 
-            }
+        //     }
             
 
+        // }
+
+        // if (mission_type == 3)
+        // {
+        //     face_aruco();
+        //     while (bounding_box_ratio() < HAMMER_RATIO) 
+        //     {
+        //         refresh();
+        //         range_aruco();
+        //         orient(macula_heading);
+        //         drive_time(0.75);
+        //         // Reset flag to get new bearing
+        //         arucoFound = 0;
+        //         holdMacula = 0;
+
+        //     }
+        // }   
+        // else if (mission_type == 4)
+        // {
+        //     face_aruco();
+        //     while (bounding_box_ratio() < BOTTLE_RATIO)
+        //     {
+        //         refresh();
+        //         range_aruco();
+        //         orient(macula_heading);
+        //         drive_time(0.75);
+        //         // Reset flag to get new bearing
+        //         arucoFound = 0;
+        //         holdMacula = 0;
+
+        //     }
+        // } 
+
+        publish_info("Navigating to object search area");
+
+        double search_radius = clamp(target_radius, 5.0, 20.0);
+
+        navigate_to_current_target(search_radius);
+        stop_rover();
+
+        publish_info("Searching for object");
+
+        if (!search_for_target(mission_type))
+        {
+            stop_rover();
+            return;
         }
 
+        publish_info("Approaching object");
+
         if (mission_type == 3)
-        {
-            face_aruco();
-            while (bounding_box_ratio() < HAMMER_RATIO) 
-            {
-                refresh();
-                range_aruco();
-                orient(macula_heading);
-                drive_time(0.75);
-                // Reset flag to get new bearing
-                arucoFound = 0;
-                holdMacula = 0;
-
-            }
-        }   
+            approach_detected_target(HAMMER_RATIO);
         else if (mission_type == 4)
-        {
-            face_aruco();
-            while (bounding_box_ratio() < BOTTLE_RATIO)
-            {
-                refresh();
-                range_aruco();
-                orient(macula_heading);
-                drive_time(0.75);
-                // Reset flag to get new bearing
-                arucoFound = 0;
-                holdMacula = 0;
+            approach_detected_target(BOTTLE_RATIO);
 
-            }
-        } 
+        stop_rover();
     }
 
     //-------------------------------------------------------------------------
     // Face AruCo
     // Turns until the AruCo is in central frame
     //-------------------------------------------------------------------------
-    void face_aruco()
+    // void face_aruco()
+    // {
+    //     while ( std::min(std::min(x0_c, x1_c), std::min(x2_c, x3_c)) <=320 )
+    //     {
+    //         confirm_core();
+    //         if ( std::min(std::min(x0_c, x1_c), std::min(x2_c, x3_c)) >= 200 )
+    //         {
+    //             orient(current_heading + 5);
+    //         }
+    //         else if ( std::min(std::min(x0_c, x1_c), std::min(x2_c, x3_c)) >= 100 )
+    //         {
+    //             orient(current_heading + 10);
+    //         }
+    //         else 
+    //         {
+    //             orient(current_heading + 15);
+    //         }
+    //         arucoFound = 0;
+    //         hammerFound = 0;
+    //         bottleFound = 0;
+    //         holdMacula = 0;
+    //     }
+    // }
+
+    void approach_detected_target(float stop_ratio)
     {
-        while ( std::min(std::min(x0_c, x1_c), std::min(x2_c, x3_c)) <=320 )
+        rclcpp::Rate rate(10);
+
+        while (rclcpp::ok() && !cancel_request)
         {
-            confirm_core();
-            if ( std::min(std::min(x0_c, x1_c), std::min(x2_c, x3_c)) >= 200 )
+            float ratio = bounding_box_ratio();
+
+            if (ratio >= stop_ratio)
             {
-                orient(current_heading + 5);
+                stop_rover();
+                return;
             }
-            else if ( std::min(std::min(x0_c, x1_c), std::min(x2_c, x3_c)) >= 100 )
-            {
-                orient(current_heading + 10);
-            }
-            else 
-            {
-                orient(current_heading + 15);
-            }
-            arucoFound = 0;
-            hammerFound = 0;
-            bottleFound = 0;
-            holdMacula = 0;
+
+            double center_error_px = 640.0 - target_center_x();
+
+            double angular = clamp(0.002 * center_error_px, -0.4, 0.4);
+            double linear = 0.25;
+
+            publish_cmd_vel(linear, angular);
+
+            rate.sleep();
         }
+
+        stop_rover();
     }
 
     //-------------------------------------------------------------------------
@@ -940,34 +1079,80 @@ private:
     // This function sends to /core/control to run the rover forward for an 
     // inputted float of time. 
     //-------------------------------------------------------------------------
-    void drive_time(float duration)
-    {
-        publish_info("Running Function: drive_time()");
-        set_distance_remaining();
-        set_bearing();
-        // if (distance_remaining < 5 || macula_range < 5)
-        // {
-            // Account for safety timeout
-            if (duration > 1) {
-                for (int i = 0; i < std::floor(duration); i++) {
-                    set_motors(3);
-                    usleep(1 * SECOND);
-                }
-            }
-            // Run the decimal point time (e.g., if duration == 1.5, already ran for 1 seconds, now run for 0.5 secs)
-            if (duration == (int)duration) {
-                set_motors(3);
-                usleep((duration - std::floor(duration)) * SECOND);
-            }
-            set_motors(0);
-        // }
-        // else 
-        // {
-            // set_motors(1);
-            // usleep(duration * SECOND);
-            // set_motors(0);
-        // }
+    // void drive_time(float duration)
+    // {
+    //     publish_info("Running Function: drive_time()");
+    //     set_distance_remaining();
+    //     set_bearing();
+    //     // if (distance_remaining < 5 || macula_range < 5)
+    //     // {
+    //         // Account for safety timeout
+    //         if (duration > 1) {
+    //             for (int i = 0; i < std::floor(duration); i++) {
+    //                 set_motors(3);
+    //                 usleep(1 * SECOND);
+    //             }
+    //         }
+    //         // Run the decimal point time (e.g., if duration == 1.5, already ran for 1 seconds, now run for 0.5 secs)
+    //         if (duration == (int)duration) {
+    //             set_motors(3);
+    //             usleep((duration - std::floor(duration)) * SECOND);
+    //         }
+    //         set_motors(0);
+    //     // }
+    //     // else 
+    //     // {
+    //         // set_motors(1);
+    //         // usleep(duration * SECOND);
+    //         // set_motors(0);
+    //     // }
 
+    // }
+
+    bool navigate_to_current_target(double stop_radius)
+    {
+        rclcpp::Rate rate(10);
+
+        while (rclcpp::ok() && !cancel_request)
+        {
+            refresh();
+
+            if (distance_remaining <= stop_radius)
+            {
+                stop_rover();
+                return true;
+            }
+
+            double heading_error = normalize_angle_deg(target_bearing - current_heading);
+
+            double angular = clamp(-0.01 * heading_error, -0.25, 0.25);
+
+            double linear = 0.6;
+
+            if (std::abs(heading_error) > 60.0)
+                linear = 0.15;
+            else if (distance_remaining < 5.0)
+                linear = 0.25;
+
+            RCLCPP_INFO(this->get_logger(),
+                "lat=%.8f lon=%.8f target_bearing=%.2f heading=%.2f error=%.2f linear=%.2f angular=%.2f dist=%.2f",
+                current_lat,
+                current_long,
+                target_bearing,
+                current_heading,
+                heading_error,
+                linear,
+                angular,
+                distance_remaining
+            );
+
+            publish_cmd_vel(linear, angular);
+
+            rate.sleep();
+        }
+
+        stop_rover();
+        return false;
     }
 
     //-------------------------------------------------------------------------
@@ -980,40 +1165,47 @@ private:
     // The embedded side of this has not been tested
     // Might do nothing
     //#########################################################################
-    void drive_meters(float meters)
-    {
-        publish_info("Running Function: drive_meters()");
-        auto command = std_msgs::msg::String();
-        std::string scommand = "driveMeters," + std::to_string(meters);
-        command.data = scommand.c_str()+'\n';
+    // void drive_meters(float meters)
+    // {
+    //     publish_info("Running Function: drive_meters()");
+    //     auto command = std_msgs::msg::String();
+    //     std::string scommand = "driveMeters," + std::to_string(meters);
+    //     command.data = scommand.c_str()+'\n';
 
-        anchorWait = 1;
-        while(anchorWait == 1)
-        {
-            usleep(0.25 * SECOND);
-            publisher_anchor->publish(command);
-        }
-        // Stop
-        set_motors(0);
-        publish_info("Went the distance");
-    }
+    //     anchorWait = 1;
+    //     while(anchorWait == 1)
+    //     {
+    //         usleep(0.25 * SECOND);
+    //         publisher_anchor->publish(command);
+    //     }
+    //     // Stop
+    //     set_motors(0);
+    //     publish_info("Went the distance");
+    // }
 
     //-------------------------------------------------------------------------
     // Approach Object
     // Using bounding box, get close to object until required ratio is met
     //-------------------------------------------------------------------------
-    void approach_object(float ratio)
+    // void approach_object(float ratio)
+    // {
+    //     refresh();
+    //     face_aruco();
+    //     holdMacula = 0;
+    //     while (bounding_box_ratio() < ratio)
+    //     {
+    //         drive_time(1.0);
+    //         holdMacula = 0;
+    //         usleep(0.2 * SECOND);
+    //     }
+    // }
+
+    double target_center_x()
     {
-        refresh();
-        face_aruco();
-        holdMacula = 0;
-        while (bounding_box_ratio() < ratio)
-        {
-            drive_time(1.0);
-            holdMacula = 0;
-            usleep(0.2 * SECOND);
-        }
+        return (x0_c + x1_c + x2_c + x3_c) / 4.0;
     }
+
+
 
     //=======================================================================//
     //= Refresh Functions                                                   =//
@@ -1067,16 +1259,8 @@ private:
     //-------------------------------------------------------------------------
     bool check_target()
     {
-        publish_info("Running Function: check_target()");
-        // confirm_core();
-        if ((abs(current_lat - target_lat) <= 0.000018) && \
-            ((abs(current_long - target_long) <= 0.000018)))
-        {
-            publish_info("Within Target Bounds!");
-            return true;
-        }
-        else
-            return false;
+        set_distance_remaining();
+        return distance_remaining <= target_radius;
     }
 
     bool check_macula_target()
@@ -1101,34 +1285,21 @@ private:
     //-------------------------------------------------------------------------
     void set_bearing()
     {
-        publish_info("Running Function: set_bearing()");
-        double X, Y, neededHeading;
-        double deltaLong = target_long - current_long;
-        double deg2rad = (3.131592/180);
-        double rad2deg = (180/3.141592);
-        int i_neededHeading;
+        double lat1 = deg_to_rad(current_lat);
+        double lat2 = deg_to_rad(target_lat);
+        double dlon = deg_to_rad(target_long - current_long);
 
-        X = ( std::cos(deg2rad * target_lat) * std::sin(deg2rad * deltaLong));
-        Y = ( std::cos(deg2rad * current_lat) * std::sin( deg2rad * target_lat))\
-            - (std::sin(deg2rad * current_lat) * std::cos(deg2rad * target_lat) * \
-            std::cos(deg2rad * deltaLong));
-        neededHeading = (rad2deg * atan2(X,Y)) + 360;
+        double y = std::sin(dlon) * std::cos(lat2);
+        double x =
+            std::cos(lat1) * std::sin(lat2) -
+            std::sin(lat1) * std::cos(lat2) * std::cos(dlon);
 
-        i_neededHeading = neededHeading;
-        i_neededHeading = i_neededHeading % 360;
-        target_bearing = (float)i_neededHeading;
+        double bearing = rad_to_deg(std::atan2(y, x));
 
-        // Macula too
-        X = ( std::cos(deg2rad * macula_lat) * std::sin(deg2rad * deltaLong));
-        Y = ( std::cos(deg2rad * current_lat) * std::sin( deg2rad * macula_lat))\
-            - (std::sin(deg2rad * current_lat) * std::cos(deg2rad * macula_lat) * \
-            std::cos(deg2rad * deltaLong));
-        neededHeading = (rad2deg * atan2(X,Y)) + 360;
+        if (bearing < 0.0)
+            bearing += 360.0;
 
-        i_neededHeading = neededHeading;
-        i_neededHeading = i_neededHeading % 360;
-        macula_heading = (float)i_neededHeading;
-
+        target_bearing = bearing;
 
     }
 
@@ -1139,23 +1310,45 @@ private:
     //-------------------------------------------------------------------------
     void set_distance_remaining()
     {
-        publish_info("Running Function: set_distance_remaining()");
-        double deg2rad = (180.0/3.141592);
-        double deltaLat = deg2rad * target_lat - current_lat;
-        double deltaLong = deg2rad * target_long - current_long;
-        double a;
-        double c;
-        double d;
-        int R = 6371000;    // Earth Radius
+        double lat1 = deg_to_rad(current_lat);
+        double lon1 = deg_to_rad(current_long);
+        double lat2 = deg_to_rad(target_lat);
+        double lon2 = deg_to_rad(target_long);
 
-        // Haversine formula
-        a = (std::sin(deltaLat / 2) * std::sin(deltaLat / 2)) + \
-            (std::cos(deg2rad * current_lat) * std::cos(deg2rad * target_lat) * \
-            (std::sin(deltaLong / 2) * std::sin(deltaLat / 2)));
-        c = 2 * atan2(sqrt(a), sqrt(1-a));
-        d = R * c;
+        double dlat = lat2 - lat1;
+        double dlon = lon2 - lon1;
 
-        distance_remaining = d;
+        double a =
+            std::sin(dlat / 2.0) * std::sin(dlat / 2.0) +
+            std::cos(lat1) * std::cos(lat2) *
+            std::sin(dlon / 2.0) * std::sin(dlon / 2.0);
+
+        double c = 2.0 * std::atan2(std::sqrt(a), std::sqrt(1.0 - a));
+
+        distance_remaining = 6371000.0 * c;
+    }
+
+    bool search_for_target(int desired_type)
+    {
+        rclcpp::Rate rate(10);
+
+        while (rclcpp::ok() && !cancel_request)
+        {
+            if (desired_type == 2 && arucoFound)
+                return true;
+
+            if (desired_type == 3 && hammerFound)
+                return true;
+
+            if (desired_type == 4 && bottleFound)
+                return true;
+
+            publish_cmd_vel(0.0, 0.35);
+            rate.sleep();
+        }
+
+        stop_rover();
+        return false;
     }
 
     //=======================================================================//
