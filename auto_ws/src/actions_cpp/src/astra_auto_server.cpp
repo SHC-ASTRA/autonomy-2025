@@ -1410,7 +1410,7 @@ private:
     {
         publish_info("Starting Function: range_aruco()");
 
-        int midpoint, pog_checker;
+        int midpoint;
         float pixelHeight, actualHeight, pixelWidth, actualWidth, distanceFromW = 0,
             range, lastRange;
         double x_offset, y_offset;
@@ -1438,7 +1438,7 @@ private:
         float estAttempts = range/2.5;
 
         // get rid of weird stderr output
-        (void)pog_checker;(void)pixelHeight;(void)actualHeight;(void)lastRange;
+        (void)pixelHeight;(void)actualHeight;(void)lastRange;
         (void)need_heading;(void)rad2deg;(void)estAttempts;
         
         theta = current_heading;
@@ -1483,7 +1483,7 @@ private:
     {
         publish_info("Starting Function: calibrate_camera()");
 
-        float midpoint, pog_checker;
+        float midpoint;
         float pixelHeight, actualHeight, pixelWidth, actualWidth, distanceFromW = 0,
             range, lastRange;
         double x_offset, y_offset;
