@@ -25,7 +25,7 @@ include_directories( ${OpenCV_INCLUDE_DIRS} )
 
 add_executable(navigate_rover_server src/astra_auto_server.cpp)
 #target_link_libraries( navigate_rover_server ${OpenCV_LIBS} )
-ament_target_dependencies(navigate_rover_server rclcpp rclcpp_action std_msgs astra_msgs nav_msgs)
+ament_target_dependencies(navigate_rover_server rclcpp rclcpp_action std_msgs astra_msgs nav_msgs sensor_msgs)
 target_link_libraries( navigate_rover_server ${OpenCV_LIBS} opencv_highgui)
 
 add_executable(navigate_rover_client src/astra_auto_client.cpp)

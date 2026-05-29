@@ -27,6 +27,8 @@
 #include "rclcpp/subscription_options.hpp"  // ROS2 subsriber info
 #include "std_msgs/msg/string.hpp"          // Message type for ROS2
 #include "geometry_msgs/msg/twist.hpp"
+#include "sensor_msgs/msg/nav_sat_fix.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 #include "nav_msgs/msg/path.hpp"
 
 //openCV shenanigans
@@ -118,6 +120,10 @@ public:
     {
         subscriber_core_ = this->create_subscription<astra_msgs::msg::CoreFeedback>(
             "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::core_callback, this, _1));
+        subscriber_fix_ = this->create_subscription<sensor_msgs::msg::NavSatFix>(
+            "/core/gps/fix", 10, std::bind(&NavigateRoverSubscriberNode::fix_callback, this, _1));
+        subscriber_imu_ = this->create_subscription<sensor_msgs::msg::Imu>(
+            "/core/imu/data", 10, std::bind(&NavigateRoverSubscriberNode::imu_callback, this, _1));
         subscriber_anchor_ = this->create_subscription<std_msgs::msg::String>(
             "/anchor/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::anchor_callback, this, _1));
         subscriber_macula_ = this->create_subscription<astra_msgs::msg::MaculaFeedback>(
@@ -136,20 +142,41 @@ private:
     //=======================================================================//
     void core_callback(const astra_msgs::msg::CoreFeedback & msg) 
     {
-        current_heading = msg.orientation;
-        current_lat = msg.gps_lat;
-        current_long = msg.gps_long;
+        // current_heading = msg.orientation;
+        // current_lat = msg.gps_lat;
+        // current_long = msg.gps_long;
         sats = msg.gps_sats;
         // if (coreWait)
         // {
             coreWait = 0;
             // RCLCPP_INFO(this->get_logger(), "Recieved Core Feedback!");
             RCLCPP_DEBUG(this->get_logger(), "Recieved Orientation: '%f' ", current_heading);
-            RCLCPP_DEBUG(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
-            RCLCPP_DEBUG(this->get_logger(), "Recieved Longitude: '%f' ", current_long);
+            
             RCLCPP_DEBUG(this->get_logger(), "With '%d' satellites", sats);
         // }
 
+    }
+
+    void fix_callback(const sensor_msgs::msg::NavSatFix &msg)
+    {
+        current_lat = msg.latitude;
+        current_long = msg.longitude;
+
+        RCLCPP_DEBUG(this->get_logger(), "Recieved Latitude: '%f' ", current_lat);
+        RCLCPP_DEBUG(this->get_logger(), "Recieved Longitude: '%f' ", current_long);
+    }
+
+    void imu_callback(const sensor_msgs::msg::Imu &msg)
+    {
+        // Convert quaternion to euler angles to get bearing
+        double x = msg.orientation.x;
+        double y = msg.orientation.y;
+        double z = msg.orientation.z;
+        double w = msg.orientation.w;
+
+        current_heading = atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)) * 180 / M_PI;
+
+        RCLCPP_DEBUG(this->get_logger(), "Recieved IMU Bearing: '%f' ", current_heading);
     }
 
     void anchor_callback(const std_msgs::msg::String & msg)
@@ -238,6 +265,8 @@ private:
     // float x0, x1, x2, x3, y0, y1, y2, y3;
 
     rclcpp::Subscription<astra_msgs::msg::CoreFeedback>::SharedPtr subscriber_core_;
+    rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr subscriber_fix_;
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr subscriber_imu_;
     rclcpp::Subscription<astra_msgs::msg::MaculaFeedback>::SharedPtr subscriber_macula_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscriber_anchor_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr subscriber_nav_;
@@ -722,7 +751,7 @@ private:
                 return true;
             }
 
-            double angular = clamp(0.03 * error, -0.6, 0.6);
+            double angular = clamp(-0.03 * error, -0.6, 0.6);
             publish_cmd_vel(0.0, angular);
 
             rate.sleep();
@@ -1125,14 +1154,17 @@ private:
 
             double heading_error = normalize_angle_deg(target_bearing - current_heading);
 
-            double angular = clamp(-0.01 * heading_error, -0.25, 0.25);
+            double angular = 0.0;
+            if (std::abs(heading_error) > 8.0) {
+                angular =clamp(-0.01 * heading_error, -0.25, 0.25); 
+            }
 
-            double linear = 0.6;
+            double linear = 0.3;
 
-            if (std::abs(heading_error) > 60.0)
-                linear = 0.15;
-            else if (distance_remaining < 5.0)
-                linear = 0.25;
+            if (std::abs(heading_error) > 45.0)
+                linear = 0.1;
+            // else if (distance_remaining < 5.0)
+            //     linear = 0.25;
 
             RCLCPP_INFO(this->get_logger(),
                 "lat=%.8f lon=%.8f target_bearing=%.2f heading=%.2f error=%.2f linear=%.2f angular=%.2f dist=%.2f",
@@ -1234,8 +1266,8 @@ private:
 
     void confirm_core()
     {
-        publish_info("Running Function: confirm_core()");
-        publish_info("Waiting for /core/feedback");
+        // publish_info("Running Function: confirm_core()");
+        // publish_info("Waiting for /core/feedback");
         coreWait = 1;
 
         // // Wait up to, say, 500ms checking every 10ms:
