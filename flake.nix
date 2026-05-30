@@ -1,0 +1,112 @@
+{
+  description = "Development environment for ASTRA Autonomy";
+
+  inputs = {
+    nix-ros-overlay.url = "github:lopsided98/nix-ros-overlay/master";
+    nixpkgs.follows = "nix-ros-overlay/nixpkgs"; # IMPORTANT!!!
+
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    unilib = {
+      url = "github:SHC-ASTRA/unilib/1c4834be48c4d650fe43e88255c59fc087eaaac1";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "nix-ros-overlay/flake-utils";
+      inputs.treefmt.follows = "treefmt-nix";
+    };
+  };
+
+  outputs =
+    {
+      self,
+      nix-ros-overlay,
+      nixpkgs,
+      unilib,
+      ...
+    }@inputs:
+    nix-ros-overlay.inputs.flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ nix-ros-overlay.overlays.default ];
+        };
+        treefmtEval = inputs.treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
+      in
+      {
+        devShells.default = pkgs.mkShell {
+          name = "ASTRA Anchor";
+          packages = with pkgs; [
+            colcon
+            socat
+            can-utils
+            (python313.withPackages (
+              p: with p; [
+                pyserial
+                python-can
+                pygame
+                scipy
+                crccheck
+                black
+                unilib.packages.${system}.unilib
+              ]
+            ))
+            (
+              with rosPackages.humble;
+              buildEnv {
+                paths = [
+                  ros-core
+                  ros2cli
+                  ros2run
+                  ros2bag
+                  rviz2
+                  xacro
+                  ament-cmake-core
+                  python-cmake-module
+                  diff-drive-controller
+                  parameter-traits
+                  generate-parameter-library
+                  joint-state-publisher-gui
+                  robot-state-publisher
+                  ros2-control
+                  controller-manager
+                  control-msgs
+                  control-toolbox
+                  topic-based-ros2-control
+                  pilz-industrial-motion-planner
+                  pick-ik
+                  ompl
+                  joy
+                  ros2-controllers
+                  chomp-motion-planner
+                  cv-bridge
+                ];
+              }
+            )
+          ];
+          shellHook = ''
+            # Display stuff
+            export DISPLAY=''${DISPLAY:-:0}
+            export QT_X11_NO_MITSHM=1
+          '';
+        };
+
+        checks.formatting = treefmtEval.config.build.check self;
+        formatter = treefmtEval.config.build.wrapper;
+      }
+    );
+
+  nixConfig = {
+    # Cache to pull ros packages from
+    extra-substituters = [
+      "https://ros.cachix.org"
+      "https://attic.iid.ciirc.cvut.cz/ros"
+    ];
+    extra-trusted-public-keys = [
+      "ros.cachix.org-1:dSyZxI8geDCJrwgvCOHDoAfOm5sV1wCPjBkKL+38Rvo="
+      "ros:JR95vUYsShSqfA1VTYoFt1Nz6uXasm5QrcOsGry9f6Q="
+    ];
+  };
+}
