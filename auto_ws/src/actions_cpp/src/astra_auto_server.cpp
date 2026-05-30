@@ -139,9 +139,9 @@ public:
         subscriber_core_ = this->create_subscription<astra_msgs::msg::CoreFeedback>(
             "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::core_callback, this, _1));
         subscriber_fix_ = this->create_subscription<sensor_msgs::msg::NavSatFix>(
-            "/core/gps/fix", 10, std::bind(&NavigateRoverSubscriberNode::fix_callback, this, _1));
+            "/core/feedback/gps/fix", 10, std::bind(&NavigateRoverSubscriberNode::fix_callback, this, _1));
         subscriber_imu_ = this->create_subscription<sensor_msgs::msg::Imu>(
-            "/core/imu/data", 10, std::bind(&NavigateRoverSubscriberNode::imu_callback, this, _1));
+            "/core/feedback/imu/data", 10, std::bind(&NavigateRoverSubscriberNode::imu_callback, this, _1));
         subscriber_anchor_ = this->create_subscription<std_msgs::msg::String>(
             "/anchor/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::anchor_callback, this, _1));
         subscriber_macula_ = this->create_subscription<astra_msgs::msg::MaculaFeedback>(
