@@ -26,9 +26,8 @@ pkgs.mkShell {
           ament-lint-common
           ament-pep257
           cv-bridge
-          python312Packages.ultralytics
-          python312Packages.torch
-          python312Packages.opencv4
+          python3Packages.ultralytics
+          python3Packages.torch
           python3Packages.pytest
           rclpy
           robot-localization

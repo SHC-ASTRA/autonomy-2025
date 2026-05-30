@@ -3,6 +3,7 @@
     nix-ros-overlay.url = "github:lopsided98/nix-ros-overlay/master";
     nixpkgs.follows = "nix-ros-overlay/nixpkgs"; # IMPORTANT!!!
     astra-msgs.url = "github:SHC-ASTRA/astra_msgs/main";
+    astra-msgs.inputs.nix-ros-overlay.follows = "nix-ros-overlay";
 
     treefmt = {
       url = "github:numtide/treefmt-nix";
