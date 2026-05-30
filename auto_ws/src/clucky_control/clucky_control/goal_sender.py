@@ -8,13 +8,16 @@ from astra_msgs import msg as my_msg
 
 class GoalSender(Node):
     def __init__(self):
-        super().__init__('goal_sender')
+        super().__init__("goal_sender")
         # 1) Action client for Nav2
-        self._action_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+        self._action_client = ActionClient(self, NavigateToPose, "navigate_to_pose")
         # 2) Subscriber to external goals
         self._sub = self.create_subscription(
             # ExternalGoal, '/external_goal', self.goal_cb, 10
-            PoseStamped, '/auto/external_goal', self.goal_cb, 10  # placeholder
+            PoseStamped,
+            "/auto/external_goal",
+            self.goal_cb,
+            10,  # placeholder
         )
 
     def goal_cb(self, msg):
@@ -35,18 +38,19 @@ class GoalSender(Node):
     def _on_goal_response(self, future):
         goal_handle = future.result()
         if not goal_handle.accepted:
-            self.get_logger().error('Goal rejected :(')
+            self.get_logger().error("Goal rejected :(")
             return
-        self.get_logger().info('Goal accepted, waiting for result...')
+        self.get_logger().info("Goal accepted, waiting for result...")
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(self._on_result)
 
     def _on_result(self, future):
         result = future.result().result
         if result.success:
-            self.get_logger().info('Navigation succeeded!')
+            self.get_logger().info("Navigation succeeded!")
         else:
-            self.get_logger().warn('Navigation failed.')
+            self.get_logger().warn("Navigation failed.")
+
 
 def main(args=None):
     rclpy.init(args=args)

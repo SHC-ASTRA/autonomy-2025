@@ -15,23 +15,25 @@ def generate_launch_description():
     realsense_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
-                get_package_share_directory('realsense2_camera'),
-                'launch',
-                'rs_launch.py'
+                get_package_share_directory("realsense2_camera"),
+                "launch",
+                "rs_launch.py",
             )
         )
     )
     rtabmap_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
-                get_package_share_directory('rtabmap_launch'),
-                'launch',
-                'rtabmap.launch.py'
+                get_package_share_directory("rtabmap_launch"),
+                "launch",
+                "rtabmap.launch.py",
             )
         )
     )
 
-    return LaunchDescription([
-        realsense_launch,
-        rtabmap_launch,
-    ])
+    return LaunchDescription(
+        [
+            realsense_launch,
+            rtabmap_launch,
+        ]
+    )
