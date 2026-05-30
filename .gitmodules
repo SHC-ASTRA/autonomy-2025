@@ -1,15 +1,4 @@
 [submodule "auto_ws/src/astra_msgs"]
 	path = auto_ws/src/astra_msgs
 	url = git@github.com:SHC-ASTRA/astra_msgs.git
-	branch = auto
-[submodule "auto_ws/src/rtabmap"]
-	path = auto_ws/src/rtabmap
-	url = https://github.com/introlab/rtabmap.git
-[submodule "auto_ws/src/rtabmap_ros"]
-	path = auto_ws/src/rtabmap_ros
-	url = https://github.com/introlab/rtabmap_ros.git
-	branch = ros2
-[submodule "auto_ws/src/realsense-ros"]
-	path = auto_ws/src/realsense-ros
-	url = https://github.com/IntelRealSense/realsense-ros.git
-	branch = ros2-master
+	branch = main
