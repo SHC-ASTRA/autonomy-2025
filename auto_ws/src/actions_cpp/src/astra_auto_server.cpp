@@ -136,14 +136,18 @@ public:
     
     NavigateRoverSubscriberNode() : Node("navigate_rover_subscriber")
     {
+	        rclcpp::QoS control_qos(rclcpp::KeepLast(2));
+    control_qos.best_effort();
+    control_qos.durability_volatile();
+
         subscriber_core_ = this->create_subscription<astra_msgs::msg::CoreFeedback>(
-            "/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::core_callback, this, _1));
+            "/core/feedback", control_qos, std::bind(&NavigateRoverSubscriberNode::core_callback, this, _1));
         subscriber_fix_ = this->create_subscription<sensor_msgs::msg::NavSatFix>(
-            "/core/feedback/gps/fix", 10, std::bind(&NavigateRoverSubscriberNode::fix_callback, this, _1));
+            "/core/feedback/gps/fix", control_qos, std::bind(&NavigateRoverSubscriberNode::fix_callback, this, _1));
         subscriber_imu_ = this->create_subscription<sensor_msgs::msg::Imu>(
-            "/core/feedback/imu/data", 10, std::bind(&NavigateRoverSubscriberNode::imu_callback, this, _1));
+            "/core/feedback/imu/data", control_qos, std::bind(&NavigateRoverSubscriberNode::imu_callback, this, _1));
         subscriber_anchor_ = this->create_subscription<std_msgs::msg::String>(
-            "/anchor/core/feedback", 10, std::bind(&NavigateRoverSubscriberNode::anchor_callback, this, _1));
+            "/anchor/from_vic/debug", 10, std::bind(&NavigateRoverSubscriberNode::anchor_callback, this, _1));
         subscriber_macula_ = this->create_subscription<astra_msgs::msg::MaculaFeedback>(
             "/auto/macula", 10, std::bind(&NavigateRoverSubscriberNode::macula_callback, this, _1));
         subscriber_nav_ = this->create_subscription<nav_msgs::msg::Path>(
@@ -1173,10 +1177,10 @@ private:
                 angular = clamp(-0.01 * heading_error, -0.25, 0.25); 
             }
 
-            double linear = 0.3;
+            double linear = 0.7;
 
             if (std::abs(heading_error) > 45.0)
-                linear = 0.1;
+                linear = 0.4;
             // else if (distance_remaining < 5.0)
             //     linear = 0.25;
 

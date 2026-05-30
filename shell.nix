@@ -32,6 +32,7 @@ pkgs.mkShell {
           rclpy
           robot-localization
           std-msgs
+	  image-transport
         ]) ++ builtins.attrValues extraPkgs ++ extraPaths
         ++ withPackages (pkgs // pkgs.rosPackages.${rosDistro});
     })
