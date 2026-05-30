@@ -191,7 +191,7 @@ public:
 
         // Publisher to send information directly to anchor
         publisher_anchor = this->create_publisher<std_msgs::msg::String>(
-            "/anchor/relay", 10);
+            "/anchor/to_vic/relay_string", 10);
         
     }
     
