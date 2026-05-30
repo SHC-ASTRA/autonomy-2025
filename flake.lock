@@ -1,5 +1,29 @@
 {
   "nodes": {
+    "astra-msgs": {
+      "inputs": {
+        "nix-ros-overlay": "nix-ros-overlay",
+        "nixpkgs": [
+          "astra-msgs",
+          "nix-ros-overlay",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1779955074,
+        "narHash": "sha256-PmPEjt24MaDaKHae9KaRgYvZrqhUTlIHZudsuQpq0cg=",
+        "owner": "SHC-ASTRA",
+        "repo": "astra_msgs",
+        "rev": "894e1e2d643ca7f32461023eaa8bf93154304c57",
+        "type": "github"
+      },
+      "original": {
+        "owner": "SHC-ASTRA",
+        "ref": "main",
+        "repo": "astra_msgs",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -18,10 +42,48 @@
         "type": "github"
       }
     },
+    "flake-utils_2": {
+      "inputs": {
+        "systems": "systems_2"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "nix-ros-overlay": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs",
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1770622967,
+        "narHash": "sha256-1LYjTugPSCa/5NkP6/dcZLH5TQYj3R8mAZ/9dgd7jDM=",
+        "owner": "lopsided98",
+        "repo": "nix-ros-overlay",
+        "rev": "d1b9f17eba909116356436d46b5192d299c6b49a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lopsided98",
+        "ref": "develop",
+        "repo": "nix-ros-overlay",
+        "type": "github"
+      }
+    },
+    "nix-ros-overlay_2": {
+      "inputs": {
+        "flake-utils": "flake-utils_2",
+        "nixpkgs": "nixpkgs_2",
         "rosdistro": "rosdistro"
       },
       "locked": {
@@ -41,6 +103,22 @@
     },
     "nixpkgs": {
       "locked": {
+        "lastModified": 1759381078,
+        "narHash": "sha256-gTrEEp5gEspIcCOx9PD8kMaF1iEmfBcTbO0Jag2QhQs=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "7df7ff7d8e00218376575f0acdcc5d66741351ee",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lopsided98",
+        "ref": "nix-ros",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
         "lastModified": 1771369470,
         "narHash": "sha256-0NBlEBKkN3lufyvFegY4TYv5mCNHbi5OmBDrzihbBMQ=",
         "owner": "NixOS",
@@ -57,13 +135,13 @@
     },
     "root": {
       "inputs": {
-        "nix-ros-overlay": "nix-ros-overlay",
+        "astra-msgs": "astra-msgs",
+        "nix-ros-overlay": "nix-ros-overlay_2",
         "nixpkgs": [
           "nix-ros-overlay",
           "nixpkgs"
         ],
-        "treefmt-nix": "treefmt-nix",
-        "unilib": "unilib"
+        "treefmt": "treefmt"
       }
     },
     "rosdistro": {
@@ -97,7 +175,22 @@
         "type": "github"
       }
     },
-    "treefmt-nix": {
+    "systems_2": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "treefmt": {
       "inputs": {
         "nixpkgs": [
           "nixpkgs"
@@ -114,34 +207,6 @@
       "original": {
         "owner": "numtide",
         "repo": "treefmt-nix",
-        "type": "github"
-      }
-    },
-    "unilib": {
-      "inputs": {
-        "flake-utils": [
-          "nix-ros-overlay",
-          "flake-utils"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "treefmt": [
-          "treefmt-nix"
-        ]
-      },
-      "locked": {
-        "lastModified": 1779828667,
-        "narHash": "sha256-7znNMaUHOkVL5ofCAE/SdFFAaX5cFUlZlgNwiOeCmN4=",
-        "owner": "SHC-ASTRA",
-        "repo": "unilib",
-        "rev": "1c4834be48c4d650fe43e88255c59fc087eaaac1",
-        "type": "github"
-      },
-      "original": {
-        "owner": "SHC-ASTRA",
-        "repo": "unilib",
-        "rev": "1c4834be48c4d650fe43e88255c59fc087eaaac1",
         "type": "github"
       }
     }
