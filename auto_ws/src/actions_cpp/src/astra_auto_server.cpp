@@ -150,6 +150,7 @@ private:
         y1_c = msg.y1;
         y2_c = msg.y2;
         y3_c = msg.y3;
+        arucoFound = msg.detected;
 
         // Hold until cleared by server
         holdMacula = 1;
@@ -434,7 +435,7 @@ private:
             case -5:
                 publish_info("Started mission -5: Serial Orient");
                 refresh();
-                serial_orient(target_bearing);
+                // serial_orient(target_bearing);
                 break;
             case -6:
                 publish_info("Started mission -6: Manual Orient");
@@ -512,8 +513,8 @@ private:
         else if (state == 2)
         {
             publish_info("Going Backwards!");
-            message.left_stick = .7;
-            message.right_stick = .7;
+            message.left_stick = -.7;
+            message.right_stick = -.7;
             message.max_speed = 70;
             message.brake = false;
             message.turn_to_enable = false;
@@ -562,21 +563,9 @@ private:
         balls.data = "can_relay_tovic,core,41," + std::to_string(direction) + ",10\n";
         publisher_anchor->publish(balls);
         // publisher_core->publish(message);
-        usleep(10 * SECOND);
+        usleep(5 * SECOND);
      
     }
-
-    // Old serial 
-    void serial_orient(float bearing)
-    {
-        publish_info("Running Function: serial_orient()");
-        auto command = std_msgs::msg::String();
-        std::string scommand = "auto,turningTo,10," + std::to_string(bearing);
-        command.data = scommand;
-        usleep(10 * SECOND);
-
-    }
-
     //-------------------------------------------------------------------------
     // Legacy Navigate
     // Orients, then goes towards point relative to distance left
@@ -591,7 +580,7 @@ private:
             refresh();
             orient(target_bearing);
             if (distance_remaining >= 15)
-                drive_time(10.0);
+                drive_time(7.0);
             else if (distance_remaining >= 6)
                 drive_time(6.0);
             else if (distance_remaining >= 3)
@@ -623,7 +612,7 @@ private:
                 refresh();
                 orient(target_bearing);
                 if (distance_remaining >= 15)
-                    drive_time(10.0);
+                    drive_time(7.0);
                 else if (distance_remaining >= 6)
                     drive_time(4.0);
                 else if (distance_remaining >= 3)
@@ -647,9 +636,10 @@ private:
             range_aruco();
             orient(macula_heading);
             drive_time(1.5);
+            publish_info("Not within bounds");
             // Reset flag to get new bearing
             arucoFound = 0;
-            holdMacula = 0;
+            // holdMacula = 0;
 
         }
     }
@@ -811,13 +801,13 @@ private:
             // Account for safety timeout
             if (duration > 1) {
                 for (int i = 0; i < std::floor(duration); i++) {
-                    set_motors(3);
+                    set_motors(1);
                     usleep(1 * SECOND);
                 }
             }
             // Run the decimal point time (e.g., if duration == 1.5, already ran for 1 seconds, now run for 0.5 secs)
             if (duration == (int)duration) {
-                set_motors(3);
+                set_motors(1);
                 usleep((duration - std::floor(duration)) * SECOND);
             }
             set_motors(0);
